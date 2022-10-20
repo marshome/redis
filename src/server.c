@@ -3985,8 +3985,22 @@ void afterCommand(client *c) {
     if (!server.in_nested_call) trackingHandlePendingKeyInvalidations();
 }
 
-void preprocessCommand(client *c){
+void preprocessCommand(client *c) {
+    c->preprocess_stopped = 0;
+
     moduleCallCommandFilters(c);//should be thread safe
+
+    /* The QUIT command is handled separately. Normal command procs will
+     * go through checking for replication and QUIT will cause trouble
+     * when FORCE_REPLICATION is enabled and would be implemented in
+     * a regular command proc. */
+    if (!strcasecmp(c->argv[0]->ptr, "quit")) {
+        addReply(c, shared.ok);
+        c->flags |= CLIENT_CLOSE_AFTER_REPLY;
+        c->preprocess_errno = C_ERR;
+        c->preprocess_stopped = 1;
+        return;
+    }
 }
 
 /* If this function gets called we already read a whole
@@ -3998,6 +4012,10 @@ void preprocessCommand(client *c){
  * other operations can be performed by the caller. Otherwise
  * if C_ERR is returned the client was destroyed (i.e. after QUIT). */
 int processCommand(client *c) {
+    if(c->preprocess_stopped){
+        return c->preprocess_errno;
+    }
+
     if (!server.lua_timedout) {
         /* Both EXEC and EVAL call call() directly so there should be
          * no way in_exec or in_eval or propagate_in_transaction is 1.
@@ -4006,16 +4024,6 @@ int processCommand(client *c) {
         serverAssert(!server.propagate_in_transaction);
         serverAssert(!server.in_exec);
         serverAssert(!server.in_eval);
-    }
-
-    /* The QUIT command is handled separately. Normal command procs will
-     * go through checking for replication and QUIT will cause trouble
-     * when FORCE_REPLICATION is enabled and would be implemented in
-     * a regular command proc. */
-    if (!strcasecmp(c->argv[0]->ptr,"quit")) {
-        addReply(c,shared.ok);
-        c->flags |= CLIENT_CLOSE_AFTER_REPLY;
-        return C_ERR;
     }
 
     /* Now lookup the command and check ASAP about trivial error conditions

@@ -948,6 +948,9 @@ typedef struct client {
     /* Response buffer */
     int bufpos;
     char buf[PROTO_REPLY_CHUNK_BYTES];
+
+    int preprocess_stopped;
+    int preprocess_errno;
 } client;
 
 struct saveparam {
