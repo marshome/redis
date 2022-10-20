@@ -3985,6 +3985,10 @@ void afterCommand(client *c) {
     if (!server.in_nested_call) trackingHandlePendingKeyInvalidations();
 }
 
+void preprocessCommand(client *c){
+    moduleCallCommandFilters(c);//should be thread safe
+}
+
 /* If this function gets called we already read a whole
  * command, arguments are in the client argv/argc fields.
  * processCommand() execute the command or prepare the
@@ -4003,8 +4007,6 @@ int processCommand(client *c) {
         serverAssert(!server.in_exec);
         serverAssert(!server.in_eval);
     }
-
-    moduleCallCommandFilters(c);
 
     /* The QUIT command is handled separately. Normal command procs will
      * go through checking for replication and QUIT will cause trouble

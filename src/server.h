@@ -2211,6 +2211,7 @@ int zslLexValueLteMax(sds value, zlexrangespec *spec);
 int getMaxmemoryState(size_t *total, size_t *logical, size_t *tofree, float *level);
 size_t freeMemoryGetNotCountedMemory();
 int overMaxmemoryAfterAlloc(size_t moremem);
+void preprocessCommand(client *c);
 int processCommand(client *c);
 int processPendingCommandsAndResetClient(client *c);
 void setupSignalHandlers(void);
