@@ -193,125 +193,125 @@ struct redisServer server; /* Server global state */
  */
 
 struct redisCommand redisCommandTable[] = {
-    {"module",moduleCommand,-2,
-     "admin no-script",
-     0,NULL,0,0,0,0,0,0},
+        {"module",      moduleCommand,     -2,
+                "admin no-script",
+                0, NULL, 0, 0,  0, 0, 0, 0},
 
-    {"get",getCommand,2,
-     "read-only fast @string",
-     0,NULL,1,1,1,0,0,0},
+        {"get",         getCommand,        2,
+                "read-only fast @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"getex",getexCommand,-2,
-     "write fast @string",
-     0,NULL,1,1,1,0,0,0},
+        {"getex",       getexCommand,      -2,
+                "write fast @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"getdel",getdelCommand,2,
-     "write fast @string",
-     0,NULL,1,1,1,0,0,0},
+        {"getdel",      getdelCommand,     2,
+                "write fast @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    /* Note that we can't flag set as fast, since it may perform an
-     * implicit DEL of a large key. */
-    {"set",setCommand,-3,
-     "write use-memory @string",
-     0,NULL,1,1,1,0,0,0},
+        /* Note that we can't flag set as fast, since it may perform an
+         * implicit DEL of a large key. */
+        {"set",         setCommand,        -3,
+                "write use-memory @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"setnx",setnxCommand,3,
-     "write use-memory fast @string",
-     0,NULL,1,1,1,0,0,0},
+        {"setnx",       setnxCommand,      3,
+                "write use-memory fast @string",
+                0, NULL, 1, 1,  1, 0, 0, 0, setnxCommandPreprocess},
 
-    {"setex",setexCommand,4,
-     "write use-memory @string",
-     0,NULL,1,1,1,0,0,0},
+        {"setex",       setexCommand,      4,
+                "write use-memory @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"psetex",psetexCommand,4,
-     "write use-memory @string",
-     0,NULL,1,1,1,0,0,0},
+        {"psetex",      psetexCommand,     4,
+                "write use-memory @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"append",appendCommand,3,
-     "write use-memory fast @string",
-     0,NULL,1,1,1,0,0,0},
+        {"append",      appendCommand,     3,
+                "write use-memory fast @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"strlen",strlenCommand,2,
-     "read-only fast @string",
-     0,NULL,1,1,1,0,0,0},
+        {"strlen",      strlenCommand,     2,
+                "read-only fast @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"del",delCommand,-2,
-     "write @keyspace",
-     0,NULL,1,-1,1,0,0,0},
+        {"del",         delCommand,        -2,
+                "write @keyspace",
+                0, NULL, 1, -1, 1, 0, 0, 0},
 
-    {"unlink",unlinkCommand,-2,
-     "write fast @keyspace",
-     0,NULL,1,-1,1,0,0,0},
+        {"unlink",      unlinkCommand,     -2,
+                "write fast @keyspace",
+                0, NULL, 1, -1, 1, 0, 0, 0},
 
-    {"exists",existsCommand,-2,
-     "read-only fast @keyspace",
-     0,NULL,1,-1,1,0,0,0},
+        {"exists",      existsCommand,     -2,
+                "read-only fast @keyspace",
+                0, NULL, 1, -1, 1, 0, 0, 0},
 
-    {"setbit",setbitCommand,4,
-     "write use-memory @bitmap",
-     0,NULL,1,1,1,0,0,0},
+        {"setbit",      setbitCommand,     4,
+                "write use-memory @bitmap",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"getbit",getbitCommand,3,
-     "read-only fast @bitmap",
-     0,NULL,1,1,1,0,0,0},
+        {"getbit",      getbitCommand,     3,
+                "read-only fast @bitmap",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"bitfield",bitfieldCommand,-2,
-     "write use-memory @bitmap",
-     0,NULL,1,1,1,0,0,0},
+        {"bitfield",    bitfieldCommand,   -2,
+                "write use-memory @bitmap",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"bitfield_ro",bitfieldroCommand,-2,
-     "read-only fast @bitmap",
-     0,NULL,1,1,1,0,0,0},
+        {"bitfield_ro", bitfieldroCommand, -2,
+                "read-only fast @bitmap",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"setrange",setrangeCommand,4,
-     "write use-memory @string",
-     0,NULL,1,1,1,0,0,0},
+        {"setrange",    setrangeCommand,   4,
+                "write use-memory @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"getrange",getrangeCommand,4,
-     "read-only @string",
-     0,NULL,1,1,1,0,0,0},
+        {"getrange",    getrangeCommand,   4,
+                "read-only @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"substr",getrangeCommand,4,
-     "read-only @string",
-     0,NULL,1,1,1,0,0,0},
+        {"substr",      getrangeCommand,   4,
+                "read-only @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"incr",incrCommand,2,
-     "write use-memory fast @string",
-     0,NULL,1,1,1,0,0,0},
+        {"incr",        incrCommand,       2,
+                "write use-memory fast @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"decr",decrCommand,2,
-     "write use-memory fast @string",
-     0,NULL,1,1,1,0,0,0},
+        {"decr",        decrCommand,       2,
+                "write use-memory fast @string",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"mget",mgetCommand,-2,
-     "read-only fast @string",
-     0,NULL,1,-1,1,0,0,0},
+        {"mget",        mgetCommand,       -2,
+                "read-only fast @string",
+                0, NULL, 1, -1, 1, 0, 0, 0},
 
-    {"rpush",rpushCommand,-3,
-     "write use-memory fast @list",
-     0,NULL,1,1,1,0,0,0},
+        {"rpush",       rpushCommand,      -3,
+                "write use-memory fast @list",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"lpush",lpushCommand,-3,
-     "write use-memory fast @list",
-     0,NULL,1,1,1,0,0,0},
+        {"lpush",       lpushCommand,      -3,
+                "write use-memory fast @list",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"rpushx",rpushxCommand,-3,
-     "write use-memory fast @list",
-     0,NULL,1,1,1,0,0,0},
+        {"rpushx",      rpushxCommand,     -3,
+                "write use-memory fast @list",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"lpushx",lpushxCommand,-3,
-     "write use-memory fast @list",
-     0,NULL,1,1,1,0,0,0},
+        {"lpushx",      lpushxCommand,     -3,
+                "write use-memory fast @list",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"linsert",linsertCommand,5,
-     "write use-memory @list",
-     0,NULL,1,1,1,0,0,0},
+        {"linsert",     linsertCommand,    5,
+                "write use-memory @list",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"rpop",rpopCommand,-2,
-     "write fast @list",
-     0,NULL,1,1,1,0,0,0},
+        {"rpop",        rpopCommand,       -2,
+                "write fast @list",
+                0, NULL, 1, 1,  1, 0, 0, 0},
 
-    {"lpop",lpopCommand,-2,
+        {"lpop",        lpopCommand,       -2,
      "write fast @list",
      0,NULL,1,1,1,0,0,0},
 
@@ -3988,8 +3988,6 @@ void afterCommand(client *c) {
 void preprocessCommand(client *c) {
     c->preprocess.stopped = 0;
     c->preprocess.err = 0;
-    c->preprocess.cmd_preprocessed = 0;
-    c->preprocess.cmd_stopped = 0;
 
     moduleCallCommandFilters(c);
 
@@ -4028,19 +4026,10 @@ void preprocessCommand(client *c) {
         return;
     }
 
-    int is_read_command = (c->cmd->flags & CMD_READONLY) ||
-                          (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_READONLY));
     int is_write_command = (c->cmd->flags & CMD_WRITE) ||
                            (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_WRITE));
     int is_denyoom_command = (c->cmd->flags & CMD_DENYOOM) ||
                              (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_DENYOOM));
-    int is_denystale_command = !(c->cmd->flags & CMD_STALE) ||
-                               (c->cmd->proc == execCommand && (c->mstate.cmd_inv_flags & CMD_STALE));
-    int is_denyloading_command = !(c->cmd->flags & CMD_LOADING) ||
-                                 (c->cmd->proc == execCommand && (c->mstate.cmd_inv_flags & CMD_LOADING));
-    int is_may_replicate_command = (c->cmd->flags & (CMD_WRITE | CMD_MAY_REPLICATE)) ||
-                                   (c->cmd->proc == execCommand &&
-                                    (c->mstate.cmd_flags & (CMD_WRITE | CMD_MAY_REPLICATE)));
 
     if (authRequired(c)) {
         /* AUTH and HELLO and no auth commands are valid even in
@@ -4184,6 +4173,13 @@ void preprocessCommand(client *c) {
         c->preprocess.err = C_OK;
         return;
     }
+
+    c->preprocess.cmd_preprocessed = 0;
+    c->preprocess.cmd_stopped = 0;
+    if (c->cmd->preprocess_proc != NULL) {
+        c->cmd->preprocess_proc(c);
+        c->preprocess.cmd_preprocessed = 1;
+    }
 }
 
 /* If this function gets called we already read a whole
@@ -4214,8 +4210,6 @@ int processCommand(client *c) {
                            (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_READONLY));
     int is_write_command = (c->cmd->flags & CMD_WRITE) ||
                            (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_WRITE));
-    int is_denyoom_command = (c->cmd->flags & CMD_DENYOOM) ||
-                             (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_DENYOOM));
     int is_denystale_command = !(c->cmd->flags & CMD_STALE) ||
                                (c->cmd->proc == execCommand && (c->mstate.cmd_inv_flags & CMD_STALE));
     int is_denyloading_command = !(c->cmd->flags & CMD_LOADING) ||

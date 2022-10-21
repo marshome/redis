@@ -861,7 +861,7 @@ typedef struct preprocessData {
     int err;
     int cmd_preprocessed;
     int cmd_stopped;
-    int key_hash;
+    uint64_t key_hash;
 } preprocessData;
 
 
@@ -1656,8 +1656,12 @@ typedef struct {
 } getKeysResult;
 #define GETKEYS_RESULT_INIT { {0}, NULL, 0, MAX_KEYS_BUFFER }
 
+typedef void redisCommandPreprocessProc(client *c);
+
 typedef void redisCommandProc(client *c);
+
 typedef int redisGetKeysProc(struct redisCommand *cmd, robj **argv, int argc, getKeysResult *result);
+
 struct redisCommand {
     char *name;
     redisCommandProc *proc;
@@ -1671,7 +1675,9 @@ struct redisCommand {
     int firstkey; /* The first argument that's a key (0 = no keys) */
     int lastkey;  /* The last argument that's a key */
     int keystep;  /* The step between first and last key */
-    long long microseconds, calls, rejected_calls, failed_calls;
+    long long microseconds, calls, rejected_calls;
+    redisCommandPreprocessProc *preprocess_proc;
+    long long failed_calls;
     int id;     /* Command ID. This is a progressive ID starting from 0 that
                    is assigned at runtime, and is used in order to check
                    ACLs. A connection is able to execute a given command if
@@ -2520,22 +2526,38 @@ void dictSdsDestructor(void *privdata, void *val);
 char *redisGitSHA1(void);
 char *redisGitDirty(void);
 uint64_t redisBuildId(void);
+
 char *redisBuildIdString(void);
 
 /* Commands prototypes */
 void authCommand(client *c);
+
 void pingCommand(client *c);
+
 void echoCommand(client *c);
+
 void commandCommand(client *c);
+
 void setCommand(client *c);
+
+void setnxCommandPreprocess(client *c);
+
 void setnxCommand(client *c);
+
 void setexCommand(client *c);
+
 void psetexCommand(client *c);
+
 void getCommand(client *c);
+
 void getexCommand(client *c);
+
 void getdelCommand(client *c);
+
 void delCommand(client *c);
+
 void unlinkCommand(client *c);
+
 void existsCommand(client *c);
 void setbitCommand(client *c);
 void getbitCommand(client *c);
