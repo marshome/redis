@@ -3974,7 +3974,7 @@ void rejectCommandFormat(client *c, const char *fmt, ...) {
  * no pre-determined key positions. */
 static int cmdHasMovableKeys(struct redisCommand *cmd) {
     return (cmd->getkeys_proc && !(cmd->flags & CMD_MODULE)) ||
-            cmd->flags & CMD_MODULE_GETKEYS;
+           cmd->flags & CMD_MODULE_GETKEYS;
 }
 
 /* This is called after a command in call, we can do some maintenance job in it. */
@@ -3983,6 +3983,50 @@ void afterCommand(client *c) {
     /* Flush pending invalidation messages only when we are not in nested call.
      * So the messages are not interleaved with transaction response. */
     if (!server.in_nested_call) trackingHandlePendingKeyInvalidations();
+}
+
+void preprocessCommand(client *c) {
+    c->preprocess.stopped = 0;
+    c->preprocess.err = 0;
+    c->preprocess.cmd_preprocessed = 0;
+    c->preprocess.cmd_stopped = 0;
+
+    moduleCallCommandFilters(c);
+
+    /* The QUIT command is handled separately. Normal command procs will
+     * go through checking for replication and QUIT will cause trouble
+     * when FORCE_REPLICATION is enabled and would be implemented in
+     * a regular command proc. */
+    if (!strcasecmp(c->argv[0]->ptr, "quit")) {
+        addReply(c, shared.ok);
+        c->flags |= CLIENT_CLOSE_AFTER_REPLY;
+        c->preprocess.stopped = 1;
+        c->preprocess.err = C_ERR;
+        return;
+    }
+
+    /* Now lookup the command and check ASAP about trivial error conditions
+     * such as wrong arity, bad command name and so forth. */
+    c->cmd = c->lastcmd = lookupCommand(c->argv[0]->ptr);
+    if (!c->cmd) {
+        sds args = sdsempty();
+        int i;
+        for (i = 1; i < c->argc && sdslen(args) < 128; i++)
+            args = sdscatprintf(args, "`%.*s`, ", 128 - (int) sdslen(args), (char *) c->argv[i]->ptr);
+        rejectCommandFormat(c, "unknown command `%s`, with args beginning with: %s",
+                            (char *) c->argv[0]->ptr, args);
+        sdsfree(args);
+        c->preprocess.stopped = 1;
+        c->preprocess.err = C_OK;
+        return;
+    } else if ((c->cmd->arity > 0 && c->cmd->arity != c->argc) ||
+               (c->argc < -c->cmd->arity)) {
+        rejectCommandFormat(c, "wrong number of arguments for '%s' command",
+                            c->cmd->name);
+        c->preprocess.stopped = 1;
+        c->preprocess.err = C_OK;
+        return;
+    }
 }
 
 /* If this function gets called we already read a whole
@@ -3994,6 +4038,11 @@ void afterCommand(client *c) {
  * other operations can be performed by the caller. Otherwise
  * if C_ERR is returned the client was destroyed (i.e. after QUIT). */
 int processCommand(client *c) {
+    
+    if (c->preprocess.stopped) {
+        return c->preprocess.err;
+    }
+
     if (!server.lua_timedout) {
         /* Both EXEC and EVAL call call() directly so there should be
          * no way in_exec or in_eval or propagate_in_transaction is 1.
@@ -4002,37 +4051,6 @@ int processCommand(client *c) {
         serverAssert(!server.propagate_in_transaction);
         serverAssert(!server.in_exec);
         serverAssert(!server.in_eval);
-    }
-
-    moduleCallCommandFilters(c);
-
-    /* The QUIT command is handled separately. Normal command procs will
-     * go through checking for replication and QUIT will cause trouble
-     * when FORCE_REPLICATION is enabled and would be implemented in
-     * a regular command proc. */
-    if (!strcasecmp(c->argv[0]->ptr,"quit")) {
-        addReply(c,shared.ok);
-        c->flags |= CLIENT_CLOSE_AFTER_REPLY;
-        return C_ERR;
-    }
-
-    /* Now lookup the command and check ASAP about trivial error conditions
-     * such as wrong arity, bad command name and so forth. */
-    c->cmd = c->lastcmd = lookupCommand(c->argv[0]->ptr);
-    if (!c->cmd) {
-        sds args = sdsempty();
-        int i;
-        for (i=1; i < c->argc && sdslen(args) < 128; i++)
-            args = sdscatprintf(args, "`%.*s`, ", 128-(int)sdslen(args), (char*)c->argv[i]->ptr);
-        rejectCommandFormat(c,"unknown command `%s`, with args beginning with: %s",
-            (char*)c->argv[0]->ptr, args);
-        sdsfree(args);
-        return C_OK;
-    } else if ((c->cmd->arity > 0 && c->cmd->arity != c->argc) ||
-               (c->argc < -c->cmd->arity)) {
-        rejectCommandFormat(c,"wrong number of arguments for '%s' command",
-            c->cmd->name);
-        return C_OK;
     }
 
     int is_read_command = (c->cmd->flags & CMD_READONLY) ||

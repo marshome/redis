@@ -856,6 +856,15 @@ typedef struct {
                                       need more reserved IDs use UINT64_MAX-1,
                                       -2, ... and so forth. */
 
+typedef struct preprocessData {
+    int stopped;
+    int err;
+    int cmd_preprocessed;
+    int cmd_stopped;
+    int key_hash;
+} preprocessData;
+
+
 typedef struct client {
     uint64_t id;            /* Client incremental unique ID. */
     connection *conn;
@@ -944,10 +953,12 @@ typedef struct client {
      * client, and in which categoty the client was, in order to remove it
      * before adding it the new value. */
     uint64_t client_cron_last_memory_usage;
-    int      client_cron_last_memory_type;
+    int client_cron_last_memory_type;
     /* Response buffer */
     int bufpos;
     char buf[PROTO_REPLY_CHUNK_BYTES];
+
+    preprocessData preprocess;
 } client;
 
 struct saveparam {
@@ -2202,23 +2213,40 @@ unsigned char *zzlFirstInLexRange(unsigned char *zl, zlexrangespec *range);
 unsigned char *zzlLastInLexRange(unsigned char *zl, zlexrangespec *range);
 zskiplistNode *zslFirstInLexRange(zskiplist *zsl, zlexrangespec *range);
 zskiplistNode *zslLastInLexRange(zskiplist *zsl, zlexrangespec *range);
+
 int zzlLexValueGteMin(unsigned char *p, zlexrangespec *spec);
+
 int zzlLexValueLteMax(unsigned char *p, zlexrangespec *spec);
+
 int zslLexValueGteMin(sds value, zlexrangespec *spec);
+
 int zslLexValueLteMax(sds value, zlexrangespec *spec);
 
 /* Core functions */
 int getMaxmemoryState(size_t *total, size_t *logical, size_t *tofree, float *level);
+
 size_t freeMemoryGetNotCountedMemory();
+
 int overMaxmemoryAfterAlloc(size_t moremem);
+
+void preprocessCommand(client *c);
+
 int processCommand(client *c);
+
 int processPendingCommandsAndResetClient(client *c);
+
 void setupSignalHandlers(void);
+
 void removeSignalHandlers(void);
+
 int createSocketAcceptHandler(socketFds *sfd, aeFileProc *accept_handler);
+
 int changeListenPort(int port, socketFds *sfd, aeFileProc *accept_handler);
+
 int changeBindAddr(sds *addrlist, int addrlist_len);
+
 struct redisCommand *lookupCommand(sds name);
+
 struct redisCommand *lookupCommandByCString(const char *s);
 struct redisCommand *lookupCommandOrOriginal(sds name);
 void call(client *c, int flags);
