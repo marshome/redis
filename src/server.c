@@ -4298,6 +4298,18 @@ void preprocessCommand(client *c) {
         c->preprocess_stopped = 1;
         return;
     }
+
+    /* Exec the command */
+    if (c->flags & CLIENT_MULTI &&
+        c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&
+        c->cmd->proc != multiCommand && c->cmd->proc != watchCommand &&
+        c->cmd->proc != resetCommand) {
+        queueMultiCommand(c);
+        addReply(c, shared.queued);
+        c->preprocess_errno = C_OK;
+        c->preprocess_stopped = 1;
+        return;
+    }
 }
 
 /* If this function gets called we already read a whole
@@ -4309,7 +4321,7 @@ void preprocessCommand(client *c) {
  * other operations can be performed by the caller. Otherwise
  * if C_ERR is returned the client was destroyed (i.e. after QUIT). */
 int processCommand(client *c) {
-    if(c->preprocess_stopped){
+    if (c->preprocess_stopped) {
         return c->preprocess_errno;
     }
 
@@ -4323,20 +4335,10 @@ int processCommand(client *c) {
         serverAssert(!server.in_eval);
     }
 
-    /* Exec the command */
-    if (c->flags & CLIENT_MULTI &&
-        c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&
-        c->cmd->proc != multiCommand && c->cmd->proc != watchCommand &&
-        c->cmd->proc != resetCommand)
-    {
-        queueMultiCommand(c);
-        addReply(c,shared.queued);
-    } else {
-        call(c,CMD_CALL_FULL);
-        c->woff = server.master_repl_offset;
-        if (listLength(server.ready_keys))
-            handleClientsBlockedOnKeys();
-    }
+    call(c, CMD_CALL_FULL);
+    c->woff = server.master_repl_offset;
+    if (listLength(server.ready_keys))
+        handleClientsBlockedOnKeys();
 
     return C_OK;
 }
