@@ -856,6 +856,12 @@ typedef struct {
                                       need more reserved IDs use UINT64_MAX-1,
                                       -2, ... and so forth. */
 
+typedef struct commandPreprocessData {
+    int stopped;
+    int err;
+    uint64_t key_hash;
+} commandPreprocessData;
+
 typedef struct client {
     uint64_t id;            /* Client incremental unique ID. */
     connection *conn;
@@ -944,13 +950,12 @@ typedef struct client {
      * client, and in which categoty the client was, in order to remove it
      * before adding it the new value. */
     uint64_t client_cron_last_memory_usage;
-    int      client_cron_last_memory_type;
+    int client_cron_last_memory_type;
     /* Response buffer */
     int bufpos;
     char buf[PROTO_REPLY_CHUNK_BYTES];
 
-    int preprocess_stopped;
-    int preprocess_errno;
+    commandPreprocessData preprocess;
 } client;
 
 struct saveparam {

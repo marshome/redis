@@ -3986,7 +3986,7 @@ void afterCommand(client *c) {
 }
 
 void preprocessCommand(client *c) {
-    c->preprocess_stopped = 0;
+    c->preprocess.stopped = 0;
 
     moduleCallCommandFilters(c);//should be thread safe
 
@@ -3997,8 +3997,8 @@ void preprocessCommand(client *c) {
     if (!strcasecmp(c->argv[0]->ptr, "quit")) {
         addReply(c, shared.ok);
         c->flags |= CLIENT_CLOSE_AFTER_REPLY;
-        c->preprocess_errno = C_ERR;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_ERR;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4008,20 +4008,20 @@ void preprocessCommand(client *c) {
     if (!c->cmd) {
         sds args = sdsempty();
         int i;
-        for (i=1; i < c->argc && sdslen(args) < 128; i++)
-            args = sdscatprintf(args, "`%.*s`, ", 128-(int)sdslen(args), (char*)c->argv[i]->ptr);
-        rejectCommandFormat(c,"unknown command `%s`, with args beginning with: %s",
-                            (char*)c->argv[0]->ptr, args);
+        for (i = 1; i < c->argc && sdslen(args) < 128; i++)
+            args = sdscatprintf(args, "`%.*s`, ", 128 - (int) sdslen(args), (char *) c->argv[i]->ptr);
+        rejectCommandFormat(c, "unknown command `%s`, with args beginning with: %s",
+                            (char *) c->argv[0]->ptr, args);
         sdsfree(args);
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     } else if ((c->cmd->arity > 0 && c->cmd->arity != c->argc) ||
                (c->argc < -c->cmd->arity)) {
-        rejectCommandFormat(c,"wrong number of arguments for '%s' command",
+        rejectCommandFormat(c, "wrong number of arguments for '%s' command",
                             c->cmd->name);
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4042,9 +4042,9 @@ void preprocessCommand(client *c) {
         /* AUTH and HELLO and no auth commands are valid even in
          * non-authenticated state. */
         if (!(c->cmd->flags & CMD_NO_AUTH)) {
-            rejectCommand(c,shared.noautherr);
-            c->preprocess_errno = C_OK;
-            c->preprocess_stopped = 1;
+            rejectCommand(c, shared.noautherr);
+            c->preprocess.err = C_OK;
+            c->preprocess.stopped = 1;
             return;
         }
     }
@@ -4075,8 +4075,8 @@ void preprocessCommand(client *c) {
                 rejectCommandFormat(c, "no permission");
                 break;
         }
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4101,10 +4101,10 @@ void preprocessCommand(client *c) {
             } else {
                 flagTransaction(c);
             }
-            clusterRedirectClient(c,n,hashslot,error_code);
+            clusterRedirectClient(c, n, hashslot, error_code);
             c->cmd->rejected_calls++;
-            c->preprocess_errno = C_OK;
-            c->preprocess_stopped = 1;
+            c->preprocess.err = C_OK;
+            c->preprocess.stopped = 1;
             return;
         }
     }
@@ -4127,8 +4127,8 @@ void preprocessCommand(client *c) {
         /* performEvictions may flush slave output buffers. This may result
          * in a slave, that may be the active client, to be freed. */
         if (server.current_client == NULL) {
-            c->preprocess_errno = C_ERR;
-            c->preprocess_stopped = 1;
+            c->preprocess.err = C_ERR;
+            c->preprocess.stopped = 1;
             return;
         }
 
@@ -4147,8 +4147,8 @@ void preprocessCommand(client *c) {
 
         if (out_of_memory && reject_cmd_on_oom) {
             rejectCommand(c, shared.oomerr);
-            c->preprocess_errno = C_OK;
-            c->preprocess_stopped = 1;
+            c->preprocess.err = C_OK;
+            c->preprocess.stopped = 1;
             return;
         }
 
@@ -4169,16 +4169,15 @@ void preprocessCommand(client *c) {
     int deny_write_type = writeCommandsDeniedByDiskError();
     if (deny_write_type != DISK_ERROR_TYPE_NONE &&
         server.masterhost == NULL &&
-        (is_write_command ||c->cmd->proc == pingCommand))
-    {
+        (is_write_command || c->cmd->proc == pingCommand)) {
         if (deny_write_type == DISK_ERROR_TYPE_RDB)
             rejectCommand(c, shared.bgsaveerr);
         else
             rejectCommandFormat(c,
                                 "-MISCONF Errors writing to the AOF file: %s",
                                 strerror(server.aof_last_write_errno));
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4188,11 +4187,10 @@ void preprocessCommand(client *c) {
         server.repl_min_slaves_to_write &&
         server.repl_min_slaves_max_lag &&
         is_write_command &&
-        server.repl_good_slaves_count < server.repl_min_slaves_to_write)
-    {
+        server.repl_good_slaves_count < server.repl_min_slaves_to_write) {
         rejectCommand(c, shared.noreplicaserr);
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4200,11 +4198,10 @@ void preprocessCommand(client *c) {
      * accept write commands if this is our master. */
     if (server.masterhost && server.repl_slave_ro &&
         !(c->flags & CLIENT_MASTER) &&
-        is_write_command)
-    {
+        is_write_command) {
         rejectCommand(c, shared.roslaveerr);
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4221,8 +4218,8 @@ void preprocessCommand(client *c) {
                             "Can't execute '%s': only (P)SUBSCRIBE / "
                             "(P)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context",
                             c->cmd->name);
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4231,11 +4228,10 @@ void preprocessCommand(client *c) {
      * link with master. */
     if (server.masterhost && server.repl_state != REPL_STATE_CONNECTED &&
         server.repl_serve_stale_data == 0 &&
-        is_denystale_command)
-    {
+        is_denystale_command) {
         rejectCommand(c, shared.masterdownerr);
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4243,8 +4239,8 @@ void preprocessCommand(client *c) {
      * CMD_LOADING flag. */
     if (server.loading && is_denyloading_command) {
         rejectCommand(c, shared.loadingerr);
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4265,14 +4261,13 @@ void preprocessCommand(client *c) {
         c->cmd->proc != resetCommand &&
         !(c->cmd->proc == shutdownCommand &&
           c->argc == 2 &&
-          tolower(((char*)c->argv[1]->ptr)[0]) == 'n') &&
+          tolower(((char *) c->argv[1]->ptr)[0]) == 'n') &&
         !(c->cmd->proc == scriptCommand &&
           c->argc == 2 &&
-          tolower(((char*)c->argv[1]->ptr)[0]) == 'k'))
-    {
+          tolower(((char *) c->argv[1]->ptr)[0]) == 'k')) {
         rejectCommand(c, shared.slowscripterr);
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4281,8 +4276,8 @@ void preprocessCommand(client *c) {
      * from which replicas are exempt. */
     if ((c->flags & CLIENT_SLAVE) && (is_may_replicate_command || is_write_command || is_read_command)) {
         rejectCommandFormat(c, "Replica can't interract with the keyspace");
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4290,12 +4285,11 @@ void preprocessCommand(client *c) {
      * the pause has ended. Replicas are never paused. */
     if (!(c->flags & CLIENT_SLAVE) &&
         ((server.client_pause_type == CLIENT_PAUSE_ALL) ||
-         (server.client_pause_type == CLIENT_PAUSE_WRITE && is_may_replicate_command)))
-    {
+         (server.client_pause_type == CLIENT_PAUSE_WRITE && is_may_replicate_command))) {
         c->bpop.timeout = 0;
-        blockClient(c,BLOCKED_PAUSE);
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        blockClient(c, BLOCKED_PAUSE);
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4306,8 +4300,8 @@ void preprocessCommand(client *c) {
         c->cmd->proc != resetCommand) {
         queueMultiCommand(c);
         addReply(c, shared.queued);
-        c->preprocess_errno = C_OK;
-        c->preprocess_stopped = 1;
+        c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 }
@@ -4321,8 +4315,8 @@ void preprocessCommand(client *c) {
  * other operations can be performed by the caller. Otherwise
  * if C_ERR is returned the client was destroyed (i.e. after QUIT). */
 int processCommand(client *c) {
-    if (c->preprocess_stopped) {
-        return c->preprocess_errno;
+    if (c->preprocess.stopped) {
+        return c->preprocess.err;
     }
 
     if (!server.lua_timedout) {
