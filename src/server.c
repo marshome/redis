@@ -4027,6 +4027,163 @@ void preprocessCommand(client *c) {
         c->preprocess.err = C_OK;
         return;
     }
+
+    int is_read_command = (c->cmd->flags & CMD_READONLY) ||
+                          (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_READONLY));
+    int is_write_command = (c->cmd->flags & CMD_WRITE) ||
+                           (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_WRITE));
+    int is_denyoom_command = (c->cmd->flags & CMD_DENYOOM) ||
+                             (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_DENYOOM));
+    int is_denystale_command = !(c->cmd->flags & CMD_STALE) ||
+                               (c->cmd->proc == execCommand && (c->mstate.cmd_inv_flags & CMD_STALE));
+    int is_denyloading_command = !(c->cmd->flags & CMD_LOADING) ||
+                                 (c->cmd->proc == execCommand && (c->mstate.cmd_inv_flags & CMD_LOADING));
+    int is_may_replicate_command = (c->cmd->flags & (CMD_WRITE | CMD_MAY_REPLICATE)) ||
+                                   (c->cmd->proc == execCommand &&
+                                    (c->mstate.cmd_flags & (CMD_WRITE | CMD_MAY_REPLICATE)));
+
+    if (authRequired(c)) {
+        /* AUTH and HELLO and no auth commands are valid even in
+         * non-authenticated state. */
+        if (!(c->cmd->flags & CMD_NO_AUTH)) {
+            rejectCommand(c, shared.noautherr);
+            c->preprocess.stopped = 1;
+            c->preprocess.err = C_OK;
+            return;
+        }
+    }
+
+    /* Check if the user can run this command according to the current
+     * ACLs. */
+    int acl_errpos;
+    int acl_retval = ACLCheckAllPerm(c, &acl_errpos);
+    if (acl_retval != ACL_OK) {
+        addACLLogEntry(c, acl_retval, acl_errpos, NULL);
+        switch (acl_retval) {
+            case ACL_DENIED_CMD:
+                rejectCommandFormat(c,
+                                    "-NOPERM this user has no permissions to run "
+                                    "the '%s' command or its subcommand", c->cmd->name);
+                break;
+            case ACL_DENIED_KEY:
+                rejectCommandFormat(c,
+                                    "-NOPERM this user has no permissions to access "
+                                    "one of the keys used as arguments");
+                break;
+            case ACL_DENIED_CHANNEL:
+                rejectCommandFormat(c,
+                                    "-NOPERM this user has no permissions to access "
+                                    "one of the channels used as arguments");
+                break;
+            default:
+                rejectCommandFormat(c, "no permission");
+                break;
+        }
+        c->preprocess.stopped = 1;
+        c->preprocess.err = C_OK;
+        return;
+    }
+
+    /* If cluster is enabled perform the cluster redirection here.
+     * However we don't perform the redirection if:
+     * 1) The sender of this command is our master.
+     * 2) The command has no key arguments. */
+    if (server.cluster_enabled &&
+        !(c->flags & CLIENT_MASTER) &&
+        !(c->flags & CLIENT_LUA &&
+          server.lua_caller->flags & CLIENT_MASTER) &&
+        !(!cmdHasMovableKeys(c->cmd) && c->cmd->firstkey == 0 &&
+          c->cmd->proc != execCommand)) {
+        int hashslot;
+        int error_code;
+        clusterNode *n = getNodeByQuery(c, c->cmd, c->argv, c->argc,
+                                        &hashslot, &error_code);
+        if (n == NULL || n != server.cluster->myself) {
+            if (c->cmd->proc == execCommand) {
+                discardTransaction(c);
+            } else {
+                flagTransaction(c);
+            }
+            clusterRedirectClient(c, n, hashslot, error_code);
+            c->cmd->rejected_calls++;
+            c->preprocess.stopped = 1;
+            c->preprocess.err = C_OK;
+            return;
+        }
+    }
+
+    /* Handle the maxmemory directive.
+     *
+     * Note that we do not want to reclaim memory if we are here re-entering
+     * the event loop since there is a busy Lua script running in timeout
+     * condition, to avoid mixing the propagation of scripts with the
+     * propagation of DELs due to eviction. */
+    if (server.maxmemory && !server.lua_timedout) {
+        int out_of_memory = (performEvictions() == EVICT_FAIL);
+
+        /* performEvictions may evict keys, so we need flush pending tracking
+         * invalidation keys. If we don't do this, we may get an invalidation
+         * message after we perform operation on the key, where in fact this
+         * message belongs to the old value of the key before it gets evicted.*/
+        trackingHandlePendingKeyInvalidations();
+
+        /* performEvictions may flush slave output buffers. This may result
+         * in a slave, that may be the active client, to be freed. */
+        if (server.current_client == NULL) {
+            c->preprocess.stopped = 1;
+            c->preprocess.err = C_ERR;
+            return;
+        }
+
+        int reject_cmd_on_oom = is_denyoom_command;
+        /* If client is in MULTI/EXEC context, queuing may consume an unlimited
+         * amount of memory, so we want to stop that.
+         * However, we never want to reject DISCARD, or even EXEC (unless it
+         * contains denied commands, in which case is_denyoom_command is already
+         * set. */
+        if (c->flags & CLIENT_MULTI &&
+            c->cmd->proc != execCommand &&
+            c->cmd->proc != discardCommand &&
+            c->cmd->proc != resetCommand) {
+            reject_cmd_on_oom = 1;
+        }
+
+        if (out_of_memory && reject_cmd_on_oom) {
+            rejectCommand(c, shared.oomerr);
+            c->preprocess.stopped = 1;
+            c->preprocess.err = C_OK;
+            return;
+        }
+
+        /* Save out_of_memory result at script start, otherwise if we check OOM
+         * until first write within script, memory used by lua stack and
+         * arguments might interfere. */
+        if (c->cmd->proc == evalCommand || c->cmd->proc == evalShaCommand) {
+            server.lua_oom = out_of_memory;
+        }
+    }
+
+    /* Make sure to use a reasonable amount of memory for client side
+     * caching metadata. */
+    if (server.tracking_clients) trackingLimitUsedSlots();
+
+    /* Don't accept write commands if there are problems persisting on disk
+     * and if this is a master instance. */
+    int deny_write_type = writeCommandsDeniedByDiskError();
+    if (deny_write_type != DISK_ERROR_TYPE_NONE &&
+        server.masterhost == NULL &&
+        (is_write_command ||c->cmd->proc == pingCommand))
+    {
+        if (deny_write_type == DISK_ERROR_TYPE_RDB)
+            rejectCommand(c, shared.bgsaveerr);
+        else
+            rejectCommandFormat(c,
+                                "-MISCONF Errors writing to the AOF file: %s",
+                                strerror(server.aof_last_write_errno));
+        c->preprocess.stopped = 1;
+        c->preprocess.err = C_OK;
+        return;
+    }
 }
 
 /* If this function gets called we already read a whole
@@ -4038,7 +4195,7 @@ void preprocessCommand(client *c) {
  * other operations can be performed by the caller. Otherwise
  * if C_ERR is returned the client was destroyed (i.e. after QUIT). */
 int processCommand(client *c) {
-    
+
     if (c->preprocess.stopped) {
         return c->preprocess.err;
     }
@@ -4066,135 +4223,6 @@ int processCommand(client *c) {
     int is_may_replicate_command = (c->cmd->flags & (CMD_WRITE | CMD_MAY_REPLICATE)) ||
                                    (c->cmd->proc == execCommand && (c->mstate.cmd_flags & (CMD_WRITE | CMD_MAY_REPLICATE)));
 
-    if (authRequired(c)) {
-        /* AUTH and HELLO and no auth commands are valid even in
-         * non-authenticated state. */
-        if (!(c->cmd->flags & CMD_NO_AUTH)) {
-            rejectCommand(c,shared.noautherr);
-            return C_OK;
-        }
-    }
-
-    /* Check if the user can run this command according to the current
-     * ACLs. */
-    int acl_errpos;
-    int acl_retval = ACLCheckAllPerm(c,&acl_errpos);
-    if (acl_retval != ACL_OK) {
-        addACLLogEntry(c,acl_retval,acl_errpos,NULL);
-        switch (acl_retval) {
-        case ACL_DENIED_CMD:
-            rejectCommandFormat(c,
-                "-NOPERM this user has no permissions to run "
-                "the '%s' command or its subcommand", c->cmd->name);
-            break;
-        case ACL_DENIED_KEY:
-            rejectCommandFormat(c,
-                "-NOPERM this user has no permissions to access "
-                "one of the keys used as arguments");
-            break;
-        case ACL_DENIED_CHANNEL:
-            rejectCommandFormat(c,
-                "-NOPERM this user has no permissions to access "
-                "one of the channels used as arguments");
-            break;
-        default:
-            rejectCommandFormat(c, "no permission");
-            break;
-        }
-        return C_OK;
-    }
-
-    /* If cluster is enabled perform the cluster redirection here.
-     * However we don't perform the redirection if:
-     * 1) The sender of this command is our master.
-     * 2) The command has no key arguments. */
-    if (server.cluster_enabled &&
-        !(c->flags & CLIENT_MASTER) &&
-        !(c->flags & CLIENT_LUA &&
-          server.lua_caller->flags & CLIENT_MASTER) &&
-        !(!cmdHasMovableKeys(c->cmd) && c->cmd->firstkey == 0 &&
-          c->cmd->proc != execCommand))
-    {
-        int hashslot;
-        int error_code;
-        clusterNode *n = getNodeByQuery(c,c->cmd,c->argv,c->argc,
-                                        &hashslot,&error_code);
-        if (n == NULL || n != server.cluster->myself) {
-            if (c->cmd->proc == execCommand) {
-                discardTransaction(c);
-            } else {
-                flagTransaction(c);
-            }
-            clusterRedirectClient(c,n,hashslot,error_code);
-            c->cmd->rejected_calls++;
-            return C_OK;
-        }
-    }
-
-    /* Handle the maxmemory directive.
-     *
-     * Note that we do not want to reclaim memory if we are here re-entering
-     * the event loop since there is a busy Lua script running in timeout
-     * condition, to avoid mixing the propagation of scripts with the
-     * propagation of DELs due to eviction. */
-    if (server.maxmemory && !server.lua_timedout) {
-        int out_of_memory = (performEvictions() == EVICT_FAIL);
-
-        /* performEvictions may evict keys, so we need flush pending tracking
-         * invalidation keys. If we don't do this, we may get an invalidation
-         * message after we perform operation on the key, where in fact this
-         * message belongs to the old value of the key before it gets evicted.*/
-        trackingHandlePendingKeyInvalidations();
-
-        /* performEvictions may flush slave output buffers. This may result
-         * in a slave, that may be the active client, to be freed. */
-        if (server.current_client == NULL) return C_ERR;
-
-        int reject_cmd_on_oom = is_denyoom_command;
-        /* If client is in MULTI/EXEC context, queuing may consume an unlimited
-         * amount of memory, so we want to stop that.
-         * However, we never want to reject DISCARD, or even EXEC (unless it
-         * contains denied commands, in which case is_denyoom_command is already
-         * set. */
-        if (c->flags & CLIENT_MULTI &&
-            c->cmd->proc != execCommand &&
-            c->cmd->proc != discardCommand &&
-            c->cmd->proc != resetCommand) {
-            reject_cmd_on_oom = 1;
-        }
-
-        if (out_of_memory && reject_cmd_on_oom) {
-            rejectCommand(c, shared.oomerr);
-            return C_OK;
-        }
-
-        /* Save out_of_memory result at script start, otherwise if we check OOM
-         * until first write within script, memory used by lua stack and
-         * arguments might interfere. */
-        if (c->cmd->proc == evalCommand || c->cmd->proc == evalShaCommand) {
-            server.lua_oom = out_of_memory;
-        }
-    }
-
-    /* Make sure to use a reasonable amount of memory for client side
-     * caching metadata. */
-    if (server.tracking_clients) trackingLimitUsedSlots();
-
-    /* Don't accept write commands if there are problems persisting on disk
-     * and if this is a master instance. */
-    int deny_write_type = writeCommandsDeniedByDiskError();
-    if (deny_write_type != DISK_ERROR_TYPE_NONE &&
-        server.masterhost == NULL &&
-        (is_write_command ||c->cmd->proc == pingCommand))
-    {
-        if (deny_write_type == DISK_ERROR_TYPE_RDB)
-            rejectCommand(c, shared.bgsaveerr);
-        else
-            rejectCommandFormat(c,
-                "-MISCONF Errors writing to the AOF file: %s",
-                strerror(server.aof_last_write_errno));
-        return C_OK;
-    }
 
     /* Don't accept write commands if there are not enough good slaves and
      * user configured the min-slaves-to-write option. */
