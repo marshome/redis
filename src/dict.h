@@ -185,16 +185,42 @@ unsigned int dictGetSomeKeys(dict *d, dictEntry **des, unsigned int count);
 void dictGetStats(char *buf, size_t bufsize, dict *d);
 uint64_t dictGenHashFunction(const void *key, int len);
 uint64_t dictGenCaseHashFunction(const unsigned char *buf, int len);
-void dictEmpty(dict *d, void(callback)(void*));
+void dictEmpty(dict *d, void(callback)(void *));
+
 void dictEnableResize(void);
+
 void dictDisableResize(void);
+
 int dictRehash(dict *d, int n);
+
 int dictRehashMilliseconds(dict *d, int ms);
+
 void dictSetHashFunctionSeed(uint8_t *seed);
+
 uint8_t *dictGetHashFunctionSeed(void);
-unsigned long dictScan(dict *d, unsigned long v, dictScanFunction *fn, dictScanBucketFunction *bucketfn, void *privdata);
+
+unsigned long
+dictScan(dict *d, unsigned long v, dictScanFunction *fn, dictScanBucketFunction *bucketfn, void *privdata);
+
 uint64_t dictGetHash(dict *d, const void *key);
+
 dictEntry **dictFindEntryRefByPtrAndHash(dict *d, const void *oldptr, uint64_t hash);
+
+int dictAddWithHash(dict *d, void *key, uint64_t hash, void *val);
+
+dictEntry *dictAddRawWithHash(dict *d, void *key, uint64_t hash, dictEntry **existing);
+
+dictEntry *dictAddOrFindWithHash(dict *d, void *key, uint64_t hash);
+
+int dictReplaceWithHash(dict *d, void *key, uint64_t hash, void *val);
+
+int dictDeleteWithHash(dict *d, const void *key, uint64_t hash);
+
+dictEntry *dictUnlinkWithHash(dict *ht, const void *key, uint64_t hash);
+
+dictEntry *dictFindWithHash(dict *d, const void *key, uint64_t hash);
+
+void *dictFetchValueWithHash(dict *d, const void *key, uint64_t hash);
 
 /* Hash table types */
 extern dictType dictTypeHeapStringCopyKey;

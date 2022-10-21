@@ -1163,14 +1163,14 @@ void dictGetStats(char *buf, size_t bufsize, dict *d) {
     char *orig_buf = buf;
     size_t orig_bufsize = bufsize;
 
-    l = _dictGetStatsHt(buf,bufsize,&d->ht[0],0);
+    l = _dictGetStatsHt(buf, bufsize, &d->ht[0], 0);
     buf += l;
     bufsize -= l;
     if (dictIsRehashing(d) && bufsize > 0) {
-        _dictGetStatsHt(buf,bufsize,&d->ht[1],1);
+        _dictGetStatsHt(buf, bufsize, &d->ht[1], 1);
     }
     /* Make sure there is a NULL term at the end. */
-    if (orig_bufsize) orig_buf[orig_bufsize-1] = '\0';
+    if (orig_bufsize) orig_buf[orig_bufsize - 1] = '\0';
 }
 
 /* ------------------------------- Benchmark ---------------------------------*/
@@ -1313,3 +1313,135 @@ int dictTest(int argc, char **argv, int accurate) {
     return 0;
 }
 #endif
+
+int dictAddWithHash(dict *d, void *key, uint64_t hash, void *val) {
+    dictEntry *entry = dictAddRawWithHash(d, key, hash, NULL);
+
+    if (!entry) return DICT_ERR;
+    dictSetVal(d, entry, val);
+    return DICT_OK;
+}
+
+dictEntry *dictAddRawWithHash(dict *d, void *key, uint64_t hash, dictEntry **existing) {
+    long index;
+    dictEntry *entry;
+    dictht *ht;
+
+    if (dictIsRehashing(d)) _dictRehashStep(d);
+
+    /* Get the index of the new element, or -1 if
+     * the element already exists. */
+    if ((index = _dictKeyIndex(d, key, hash, existing)) == -1)
+        return NULL;
+
+    /* Allocate the memory and store the new entry.
+     * Insert the element in top, with the assumption that in a database
+     * system it is more likely that recently added entries are accessed
+     * more frequently. */
+    ht = dictIsRehashing(d) ? &d->ht[1] : &d->ht[0];
+    entry = zmalloc(sizeof(*entry));
+    entry->next = ht->table[index];
+    ht->table[index] = entry;
+    ht->used++;
+
+    /* Set the hash entry fields. */
+    dictSetKey(d, entry, key);
+    return entry;
+}
+
+dictEntry *dictAddOrFindWithHash(dict *d, void *key, uint64_t hash) {
+    dictEntry *entry, *existing;
+    entry = dictAddRawWithHash(d, key, hash, &existing);
+    return entry ? entry : existing;
+}
+
+int dictReplaceWithHash(dict *d, void *key, uint64_t hash, void *val) {
+    dictEntry *entry, *existing, auxentry;
+
+    /* Try to add the element. If the key
+     * does not exists dictAdd will succeed. */
+    entry = dictAddRawWithHash(d, key, hash, &existing);
+    if (entry) {
+        dictSetVal(d, entry, val);
+        return 1;
+    }
+
+    /* Set the new value and free the old one. Note that it is important
+     * to do that in this order, as the value may just be exactly the same
+     * as the previous one. In this context, think to reference counting,
+     * you want to increment (set), and then decrement (free), and not the
+     * reverse. */
+    auxentry = *existing;
+    dictSetVal(d, existing, val);
+    dictFreeVal(d, &auxentry);
+    return 0;
+}
+
+static dictEntry *dictGenericDeleteWithHash(dict *d, const void *key, uint64_t h, int nofree) {
+    uint64_t idx;
+    dictEntry *he, *prevHe;
+    int table;
+
+    if (d->ht[0].used == 0 && d->ht[1].used == 0) return NULL;
+
+    if (dictIsRehashing(d)) _dictRehashStep(d);
+    for (table = 0; table <= 1; table++) {
+        idx = h & d->ht[table].sizemask;
+        he = d->ht[table].table[idx];
+        prevHe = NULL;
+        while (he) {
+            if (key == he->key || dictCompareKeys(d, key, he->key)) {
+                /* Unlink the element from the list */
+                if (prevHe)
+                    prevHe->next = he->next;
+                else
+                    d->ht[table].table[idx] = he->next;
+                if (!nofree) {
+                    dictFreeKey(d, he);
+                    dictFreeVal(d, he);
+                    zfree(he);
+                }
+                d->ht[table].used--;
+                return he;
+            }
+            prevHe = he;
+            he = he->next;
+        }
+        if (!dictIsRehashing(d)) break;
+    }
+    return NULL; /* not found */
+}
+
+int dictDeleteWithHash(dict *ht, const void *key, uint64_t hash) {
+    return dictGenericDeleteWithHash(ht, key, hash, 0) ? DICT_OK : DICT_ERR;
+}
+
+dictEntry *dictUnlinkWithHash(dict *ht, const void *key, uint64_t hash) {
+    return dictGenericDeleteWithHash(ht, key, hash, 1);
+}
+
+dictEntry *dictFindWithHash(dict *d, const void *key, uint64_t h) {
+    dictEntry *he;
+    uint64_t idx, table;
+
+    if (dictSize(d) == 0) return NULL; /* dict is empty */
+    if (dictIsRehashing(d)) _dictRehashStep(d);
+    for (table = 0; table <= 1; table++) {
+        idx = h & d->ht[table].sizemask;
+        he = d->ht[table].table[idx];
+        while (he) {
+            if (key == he->key || dictCompareKeys(d, key, he->key))
+                return he;
+            he = he->next;
+        }
+        if (!dictIsRehashing(d)) return NULL;
+    }
+    return NULL;
+}
+
+void *dictFetchValueWithHash(dict *d, const void *key, uint64_t hash) {
+    dictEntry *he;
+
+    he = dictFindWithHash(d, key, hash);
+    return he ? dictGetVal(he) : NULL;
+}
