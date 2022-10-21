@@ -2087,26 +2087,6 @@ void commandProcessed(client *c) {
     }
 }
 
-int preprocessCommandAndResetClient(client *c) {
-    int deadclient = 0;
-    client *old_client = server.current_client;
-    server.current_client = c;
-    preprocessCommand(c);
-    if (server.current_client == NULL) deadclient = 1;
-    /*
-     * Restore the old client, this is needed because when a script
-     * times out, we will get into this code from processEventsWhileBlocked.
-     * Which will cause to set the server.current_client. If not restored
-     * we will return 1 to our caller which will falsely indicate the client
-     * is dead and will stop reading from its buffer.
-     */
-    server.current_client = old_client;
-    /* performEvictions may flush slave output buffers. This may
-     * result in a slave, that may be the active client, to be
-     * freed. */
-    return deadclient ? C_ERR : C_OK;
-}
-
 /* This function calls processCommand(), but also performs a few sub tasks
  * for the client that are useful in that context:
  *
@@ -2210,9 +2190,9 @@ void processInputBuffer(client *c) {
         if (c->argc == 0) {
             resetClient(c);
         } else {
-            if (preprocessCommandAndResetClient(c) == C_ERR) {
-                return;
-            }
+            
+            preprocessCommand(c);
+
             /* If we are in the context of an I/O thread, we can't really
              * execute the command here. All we can do is to flag the client
              * as one that needs to process the command. */
