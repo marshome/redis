@@ -859,7 +859,12 @@ typedef struct {
 typedef struct commandPreprocessData {
     int stopped;
     int err;
+    int cmdPreprocessed;
+    int cmdPreprocessedStopped;
     uint64_t key_hash;
+    robj *expire;//setCommand
+    int unit;//setCommand
+    int flags;//setCommand
 } commandPreprocessData;
 
 typedef struct client {
@@ -1654,7 +1659,11 @@ typedef struct {
 #define GETKEYS_RESULT_INIT { {0}, NULL, 0, MAX_KEYS_BUFFER }
 
 typedef void redisCommandProc(client *c);
+
+typedef void redisCommandPreprocessProc(client *c);
+
 typedef int redisGetKeysProc(struct redisCommand *cmd, robj **argv, int argc, getKeysResult *result);
+
 struct redisCommand {
     char *name;
     redisCommandProc *proc;
@@ -1668,7 +1677,9 @@ struct redisCommand {
     int firstkey; /* The first argument that's a key (0 = no keys) */
     int lastkey;  /* The last argument that's a key */
     int keystep;  /* The step between first and last key */
-    long long microseconds, calls, rejected_calls, failed_calls;
+    long long microseconds, calls, rejected_calls;
+    redisCommandPreprocessProc *preprocessProc;
+    long long failed_calls;
     int id;     /* Command ID. This is a progressive ID starting from 0 that
                    is assigned at runtime, and is used in order to check
                    ACLs. A connection is able to execute a given command if
@@ -2766,7 +2777,9 @@ void makeThreadKillable(void);
 
 /* TLS stuff */
 void tlsInit(void);
+
 void tlsCleanup(void);
+
 int tlsConfigure(redisTLSContextConfig *ctx_config);
 
 #define redisDebug(fmt, ...) \
@@ -2775,5 +2788,13 @@ int tlsConfigure(redisTLSContextConfig *ctx_config);
     printf("-- MARK %s:%d --\n", __FILE__, __LINE__)
 
 int iAmMaster(void);
+
+void setCommandPreprocess(client *c);
+
+void setnxCommandPreprocess(client *c);
+
+void setexCommandPreprocess(client *c);
+
+void psetexCommandPreprocess(client *c);
 
 #endif

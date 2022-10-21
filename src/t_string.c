@@ -245,50 +245,103 @@ int parseExtendedStringArgumentsOrReply(client *c, int *flags, int *unit, robj *
             *expire = next;
             j++;
         } else {
-            addReplyErrorObject(c,shared.syntaxerr);
+            addReplyErrorObject(c, shared.syntaxerr);
             return C_ERR;
         }
     }
     return C_OK;
 }
 
-/* SET key value [NX] [XX] [KEEPTTL] [GET] [EX <seconds>] [PX <milliseconds>]
- *     [EXAT <seconds-timestamp>][PXAT <milliseconds-timestamp>] */
-void setCommand(client *c) {
-    robj *expire = NULL;
-    int unit = UNIT_SECONDS;
-    int flags = OBJ_NO_FLAGS;
+void setCommandPreprocess(client *c) {
+    c->preprocess.expire = NULL;
+    c->preprocess.unit = UNIT_SECONDS;
+    c->preprocess.flags = OBJ_NO_FLAGS;
 
-    if (parseExtendedStringArgumentsOrReply(c,&flags,&unit,&expire,COMMAND_SET) != C_OK) {
+    if (parseExtendedStringArgumentsOrReply(c,
+                                            &c->preprocess.flags,
+                                            &c->preprocess.unit,
+                                            &c->preprocess.expire,
+                                            COMMAND_SET) != C_OK) {
+        c->preprocess.stopped = 1;
         return;
     }
 
     c->argv[2] = tryObjectEncoding(c->argv[2]);
-    setGenericCommand(c,flags,c->argv[1],c->argv[2],expire,unit,NULL,NULL);
+}
+
+/* SET key value [NX] [XX] [KEEPTTL] [GET] [EX <seconds>] [PX <milliseconds>]
+ *     [EXAT <seconds-timestamp>][PXAT <milliseconds-timestamp>] */
+void setCommand(client *c) {
+    if (c->preprocess.cmdPreprocessed) {
+        if (c->preprocess.cmdPreprocessedStopped) {
+            return;
+        }
+        setGenericCommand(c, c->preprocess.flags,
+                          c->argv[1],
+                          c->argv[2],
+                          c->preprocess.expire,
+                          c->preprocess.unit,
+                          NULL, NULL);
+    } else {
+        robj *expire = NULL;
+        int unit = UNIT_SECONDS;
+        int flags = OBJ_NO_FLAGS;
+
+        if (parseExtendedStringArgumentsOrReply(c, &flags, &unit, &expire, COMMAND_SET) != C_OK) {
+            return;
+        }
+
+        c->argv[2] = tryObjectEncoding(c->argv[2]);
+        setGenericCommand(c, flags, c->argv[1], c->argv[2], expire, unit, NULL, NULL);
+    }
+}
+
+void setnxCommandPreprocess(client *c) {
+    c->argv[2] = tryObjectEncoding(c->argv[2]);
 }
 
 void setnxCommand(client *c) {
-    c->argv[2] = tryObjectEncoding(c->argv[2]);
-    setGenericCommand(c,OBJ_SET_NX,c->argv[1],c->argv[2],NULL,0,shared.cone,shared.czero);
+    if (c->preprocess.cmdPreprocessed) {
+        setGenericCommand(c, OBJ_SET_NX, c->argv[1], c->argv[2], NULL, 0, shared.cone, shared.czero);
+    } else {
+        c->argv[2] = tryObjectEncoding(c->argv[2]);
+        setGenericCommand(c, OBJ_SET_NX, c->argv[1], c->argv[2], NULL, 0, shared.cone, shared.czero);
+    }
+}
+
+void setexCommandPreprocess(client *c) {
+    c->argv[3] = tryObjectEncoding(c->argv[3]);
 }
 
 void setexCommand(client *c) {
+    if (c->preprocess.cmdPreprocessed) {
+        setGenericCommand(c, OBJ_EX, c->argv[1], c->argv[3], c->argv[2], UNIT_SECONDS, NULL, NULL);
+    } else {
+        c->argv[3] = tryObjectEncoding(c->argv[3]);
+        setGenericCommand(c, OBJ_EX, c->argv[1], c->argv[3], c->argv[2], UNIT_SECONDS, NULL, NULL);
+    }
+}
+
+void psetexCommandPreprocess(client *c) {
     c->argv[3] = tryObjectEncoding(c->argv[3]);
-    setGenericCommand(c,OBJ_EX,c->argv[1],c->argv[3],c->argv[2],UNIT_SECONDS,NULL,NULL);
 }
 
 void psetexCommand(client *c) {
-    c->argv[3] = tryObjectEncoding(c->argv[3]);
-    setGenericCommand(c,OBJ_PX,c->argv[1],c->argv[3],c->argv[2],UNIT_MILLISECONDS,NULL,NULL);
+    if (c->preprocess.cmdPreprocessed) {
+        setGenericCommand(c, OBJ_PX, c->argv[1], c->argv[3], c->argv[2], UNIT_MILLISECONDS, NULL, NULL);
+    } else {
+        c->argv[3] = tryObjectEncoding(c->argv[3]);
+        setGenericCommand(c, OBJ_PX, c->argv[1], c->argv[3], c->argv[2], UNIT_MILLISECONDS, NULL, NULL);
+    }
 }
 
 int getGenericCommand(client *c) {
     robj *o;
 
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.null[c->resp])) == NULL)
+    if ((o = lookupKeyReadOrReply(c, c->argv[1], shared.null[c->resp])) == NULL)
         return C_OK;
 
-    if (checkType(c,o,OBJ_STRING)) {
+    if (checkType(c, o, OBJ_STRING)) {
         return C_ERR;
     }
 
