@@ -4024,33 +4024,9 @@ void preprocessCommand(client *c) {
         c->preprocess_stopped = 1;
         return;
     }
-}
-
-/* If this function gets called we already read a whole
- * command, arguments are in the client argv/argc fields.
- * processCommand() execute the command or prepare the
- * server for a bulk read from the client.
- *
- * If C_OK is returned the client is still alive and valid and
- * other operations can be performed by the caller. Otherwise
- * if C_ERR is returned the client was destroyed (i.e. after QUIT). */
-int processCommand(client *c) {
-    if(c->preprocess_stopped){
-        return c->preprocess_errno;
-    }
-
-    if (!server.lua_timedout) {
-        /* Both EXEC and EVAL call call() directly so there should be
-         * no way in_exec or in_eval or propagate_in_transaction is 1.
-         * That is unless lua_timedout, in which case client may run
-         * some commands. */
-        serverAssert(!server.propagate_in_transaction);
-        serverAssert(!server.in_exec);
-        serverAssert(!server.in_eval);
-    }
 
     int is_read_command = (c->cmd->flags & CMD_READONLY) ||
-                           (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_READONLY));
+                          (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_READONLY));
     int is_write_command = (c->cmd->flags & CMD_WRITE) ||
                            (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_WRITE));
     int is_denyoom_command = (c->cmd->flags & CMD_DENYOOM) ||
@@ -4067,7 +4043,9 @@ int processCommand(client *c) {
          * non-authenticated state. */
         if (!(c->cmd->flags & CMD_NO_AUTH)) {
             rejectCommand(c,shared.noautherr);
-            return C_OK;
+            c->preprocess_errno = C_OK;
+            c->preprocess_stopped = 1;
+            return;
         }
     }
 
@@ -4078,26 +4056,28 @@ int processCommand(client *c) {
     if (acl_retval != ACL_OK) {
         addACLLogEntry(c,acl_retval,acl_errpos,NULL);
         switch (acl_retval) {
-        case ACL_DENIED_CMD:
-            rejectCommandFormat(c,
-                "-NOPERM this user has no permissions to run "
-                "the '%s' command or its subcommand", c->cmd->name);
-            break;
-        case ACL_DENIED_KEY:
-            rejectCommandFormat(c,
-                "-NOPERM this user has no permissions to access "
-                "one of the keys used as arguments");
-            break;
-        case ACL_DENIED_CHANNEL:
-            rejectCommandFormat(c,
-                "-NOPERM this user has no permissions to access "
-                "one of the channels used as arguments");
-            break;
-        default:
-            rejectCommandFormat(c, "no permission");
-            break;
+            case ACL_DENIED_CMD:
+                rejectCommandFormat(c,
+                                    "-NOPERM this user has no permissions to run "
+                                    "the '%s' command or its subcommand", c->cmd->name);
+                break;
+            case ACL_DENIED_KEY:
+                rejectCommandFormat(c,
+                                    "-NOPERM this user has no permissions to access "
+                                    "one of the keys used as arguments");
+                break;
+            case ACL_DENIED_CHANNEL:
+                rejectCommandFormat(c,
+                                    "-NOPERM this user has no permissions to access "
+                                    "one of the channels used as arguments");
+                break;
+            default:
+                rejectCommandFormat(c, "no permission");
+                break;
         }
-        return C_OK;
+        c->preprocess_errno = C_OK;
+        c->preprocess_stopped = 1;
+        return;
     }
 
     /* If cluster is enabled perform the cluster redirection here.
@@ -4123,7 +4103,9 @@ int processCommand(client *c) {
             }
             clusterRedirectClient(c,n,hashslot,error_code);
             c->cmd->rejected_calls++;
-            return C_OK;
+            c->preprocess_errno = C_OK;
+            c->preprocess_stopped = 1;
+            return;
         }
     }
 
@@ -4144,7 +4126,11 @@ int processCommand(client *c) {
 
         /* performEvictions may flush slave output buffers. This may result
          * in a slave, that may be the active client, to be freed. */
-        if (server.current_client == NULL) return C_ERR;
+        if (server.current_client == NULL) {
+            c->preprocess_errno = C_ERR;
+            c->preprocess_stopped = 1;
+            return;
+        }
 
         int reject_cmd_on_oom = is_denyoom_command;
         /* If client is in MULTI/EXEC context, queuing may consume an unlimited
@@ -4161,7 +4147,9 @@ int processCommand(client *c) {
 
         if (out_of_memory && reject_cmd_on_oom) {
             rejectCommand(c, shared.oomerr);
-            return C_OK;
+            c->preprocess_errno = C_OK;
+            c->preprocess_stopped = 1;
+            return;
         }
 
         /* Save out_of_memory result at script start, otherwise if we check OOM
@@ -4187,9 +4175,11 @@ int processCommand(client *c) {
             rejectCommand(c, shared.bgsaveerr);
         else
             rejectCommandFormat(c,
-                "-MISCONF Errors writing to the AOF file: %s",
-                strerror(server.aof_last_write_errno));
-        return C_OK;
+                                "-MISCONF Errors writing to the AOF file: %s",
+                                strerror(server.aof_last_write_errno));
+        c->preprocess_errno = C_OK;
+        c->preprocess_stopped = 1;
+        return;
     }
 
     /* Don't accept write commands if there are not enough good slaves and
@@ -4201,7 +4191,9 @@ int processCommand(client *c) {
         server.repl_good_slaves_count < server.repl_min_slaves_to_write)
     {
         rejectCommand(c, shared.noreplicaserr);
-        return C_OK;
+        c->preprocess_errno = C_OK;
+        c->preprocess_stopped = 1;
+        return;
     }
 
     /* Don't accept write commands if this is a read only slave. But
@@ -4211,7 +4203,9 @@ int processCommand(client *c) {
         is_write_command)
     {
         rejectCommand(c, shared.roslaveerr);
-        return C_OK;
+        c->preprocess_errno = C_OK;
+        c->preprocess_stopped = 1;
+        return;
     }
 
     /* Only allow a subset of commands in the context of Pub/Sub if the
@@ -4224,10 +4218,12 @@ int processCommand(client *c) {
         c->cmd->proc != punsubscribeCommand &&
         c->cmd->proc != resetCommand) {
         rejectCommandFormat(c,
-            "Can't execute '%s': only (P)SUBSCRIBE / "
-            "(P)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context",
-            c->cmd->name);
-        return C_OK;
+                            "Can't execute '%s': only (P)SUBSCRIBE / "
+                            "(P)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context",
+                            c->cmd->name);
+        c->preprocess_errno = C_OK;
+        c->preprocess_stopped = 1;
+        return;
     }
 
     /* Only allow commands with flag "t", such as INFO, SLAVEOF and so on,
@@ -4238,14 +4234,18 @@ int processCommand(client *c) {
         is_denystale_command)
     {
         rejectCommand(c, shared.masterdownerr);
-        return C_OK;
+        c->preprocess_errno = C_OK;
+        c->preprocess_stopped = 1;
+        return;
     }
 
     /* Loading DB? Return an error if the command has not the
      * CMD_LOADING flag. */
     if (server.loading && is_denyloading_command) {
         rejectCommand(c, shared.loadingerr);
-        return C_OK;
+        c->preprocess_errno = C_OK;
+        c->preprocess_stopped = 1;
+        return;
     }
 
     /* Lua script too slow? Only allow a limited number of commands.
@@ -4255,14 +4255,14 @@ int processCommand(client *c) {
      * condition resolves, and the bottom-half of the transaction gets
      * executed, see Github PR #7022. */
     if (server.lua_timedout &&
-          c->cmd->proc != authCommand &&
-          c->cmd->proc != helloCommand &&
-          c->cmd->proc != replconfCommand &&
-          c->cmd->proc != multiCommand &&
-          c->cmd->proc != discardCommand &&
-          c->cmd->proc != watchCommand &&
-          c->cmd->proc != unwatchCommand &&
-          c->cmd->proc != resetCommand &&
+        c->cmd->proc != authCommand &&
+        c->cmd->proc != helloCommand &&
+        c->cmd->proc != replconfCommand &&
+        c->cmd->proc != multiCommand &&
+        c->cmd->proc != discardCommand &&
+        c->cmd->proc != watchCommand &&
+        c->cmd->proc != unwatchCommand &&
+        c->cmd->proc != resetCommand &&
         !(c->cmd->proc == shutdownCommand &&
           c->argc == 2 &&
           tolower(((char*)c->argv[1]->ptr)[0]) == 'n') &&
@@ -4271,7 +4271,9 @@ int processCommand(client *c) {
           tolower(((char*)c->argv[1]->ptr)[0]) == 'k'))
     {
         rejectCommand(c, shared.slowscripterr);
-        return C_OK;
+        c->preprocess_errno = C_OK;
+        c->preprocess_stopped = 1;
+        return;
     }
 
     /* Prevent a replica from sending commands that access the keyspace.
@@ -4279,18 +4281,46 @@ int processCommand(client *c) {
      * from which replicas are exempt. */
     if ((c->flags & CLIENT_SLAVE) && (is_may_replicate_command || is_write_command || is_read_command)) {
         rejectCommandFormat(c, "Replica can't interract with the keyspace");
-        return C_OK;
+        c->preprocess_errno = C_OK;
+        c->preprocess_stopped = 1;
+        return;
     }
 
     /* If the server is paused, block the client until
      * the pause has ended. Replicas are never paused. */
-    if (!(c->flags & CLIENT_SLAVE) && 
+    if (!(c->flags & CLIENT_SLAVE) &&
         ((server.client_pause_type == CLIENT_PAUSE_ALL) ||
-        (server.client_pause_type == CLIENT_PAUSE_WRITE && is_may_replicate_command)))
+         (server.client_pause_type == CLIENT_PAUSE_WRITE && is_may_replicate_command)))
     {
         c->bpop.timeout = 0;
         blockClient(c,BLOCKED_PAUSE);
-        return C_OK;       
+        c->preprocess_errno = C_OK;
+        c->preprocess_stopped = 1;
+        return;
+    }
+}
+
+/* If this function gets called we already read a whole
+ * command, arguments are in the client argv/argc fields.
+ * processCommand() execute the command or prepare the
+ * server for a bulk read from the client.
+ *
+ * If C_OK is returned the client is still alive and valid and
+ * other operations can be performed by the caller. Otherwise
+ * if C_ERR is returned the client was destroyed (i.e. after QUIT). */
+int processCommand(client *c) {
+    if(c->preprocess_stopped){
+        return c->preprocess_errno;
+    }
+
+    if (!server.lua_timedout) {
+        /* Both EXEC and EVAL call call() directly so there should be
+         * no way in_exec or in_eval or propagate_in_transaction is 1.
+         * That is unless lua_timedout, in which case client may run
+         * some commands. */
+        serverAssert(!server.propagate_in_transaction);
+        serverAssert(!server.in_exec);
+        serverAssert(!server.in_eval);
     }
 
     /* Exec the command */
