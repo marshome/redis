@@ -2538,6 +2538,8 @@ void echoCommand(client *c);
 
 void commandCommand(client *c);
 
+void setCommandPreprocess(client *c);
+
 void setCommand(client *c);
 
 void setnxCommandPreprocess(client *c);

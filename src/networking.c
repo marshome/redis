@@ -2190,7 +2190,7 @@ void processInputBuffer(client *c) {
         if (c->argc == 0) {
             resetClient(c);
         } else {
-            
+
             preprocessCommand(c);
 
             /* If we are in the context of an I/O thread, we can't really

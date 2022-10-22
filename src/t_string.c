@@ -245,26 +245,41 @@ int parseExtendedStringArgumentsOrReply(client *c, int *flags, int *unit, robj *
             *expire = next;
             j++;
         } else {
-            addReplyErrorObject(c,shared.syntaxerr);
+            addReplyErrorObject(c, shared.syntaxerr);
             return C_ERR;
         }
     }
     return C_OK;
 }
 
+void setCommandPreprocess(client *c) {
+    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
+    c->argv[2] = tryObjectEncoding(c->argv[2]);
+}
+
 /* SET key value [NX] [XX] [KEEPTTL] [GET] [EX <seconds>] [PX <milliseconds>]
  *     [EXAT <seconds-timestamp>][PXAT <milliseconds-timestamp>] */
 void setCommand(client *c) {
-    robj *expire = NULL;
-    int unit = UNIT_SECONDS;
-    int flags = OBJ_NO_FLAGS;
+    if (c->preprocess.cmd_preprocessed) {
+        robj *expire = NULL;
+        int unit = UNIT_SECONDS;
+        int flags = OBJ_NO_FLAGS;
+        if (parseExtendedStringArgumentsOrReply(c, &flags, &unit, &expire, COMMAND_SET) != C_OK) {
+            return;
+        }
+        setGenericCommand(c, flags, c->argv[1], c->argv[2], expire, unit, NULL, NULL);
+    } else {
+        robj *expire = NULL;
+        int unit = UNIT_SECONDS;
+        int flags = OBJ_NO_FLAGS;
 
-    if (parseExtendedStringArgumentsOrReply(c, &flags, &unit, &expire, COMMAND_SET) != C_OK) {
-        return;
+        if (parseExtendedStringArgumentsOrReply(c, &flags, &unit, &expire, COMMAND_SET) != C_OK) {
+            return;
+        }
+
+        c->argv[2] = tryObjectEncoding(c->argv[2]);
+        setGenericCommand(c, flags, c->argv[1], c->argv[2], expire, unit, NULL, NULL);
     }
-
-    c->argv[2] = tryObjectEncoding(c->argv[2]);
-    setGenericCommand(c, flags, c->argv[1], c->argv[2], expire, unit, NULL, NULL);
 }
 
 void setnxCommandPreprocess(client *c) {
@@ -274,7 +289,6 @@ void setnxCommandPreprocess(client *c) {
 
 void setnxCommand(client *c) {
     if (c->preprocess.cmd_preprocessed) {
-        printf("AAA\n");
         setGenericCommand(c, OBJ_SET_NX, c->argv[1], c->argv[2], NULL, 0, shared.cone, shared.czero);
     } else {
         c->argv[2] = tryObjectEncoding(c->argv[2]);
