@@ -2807,21 +2807,39 @@ void pexpireatCommand(client *c);
 void getsetCommandPreprocess(client *c);
 
 void getsetCommand(client *c);
+
 void ttlCommand(client *c);
+
 void touchCommand(client *c);
+
 void pttlCommand(client *c);
+
 void persistCommand(client *c);
+
 void replicaofCommand(client *c);
+
 void roleCommand(client *c);
+
 void debugCommand(client *c);
+
+void msetGenericCommandPreprocess(client *c);
+
 void msetCommand(client *c);
+
 void msetnxCommand(client *c);
+
 void zaddCommand(client *c);
+
 void zincrbyCommand(client *c);
+
 void zrangeCommand(client *c);
+
 void zrangebyscoreCommand(client *c);
+
 void zrevrangebyscoreCommand(client *c);
+
 void zrangebylexCommand(client *c);
+
 void zrevrangebylexCommand(client *c);
 void zcountCommand(client *c);
 void zlexcountCommand(client *c);

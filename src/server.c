@@ -654,11 +654,11 @@ struct redisCommand redisCommandTable[] = {
 
         {"mset",        msetCommand,        -3,
                 "write use-memory @string",
-                0, NULL,                        1, -1, 2, 0, 0, 0, NULL},
+                0, NULL,                        1, -1, 2, 0, 0, 0, msetGenericCommandPreprocess},
 
         {"msetnx",      msetnxCommand,      -3,
                 "write use-memory @string",
-                0, NULL,                        1, -1, 2, 0, 0, 0, NULL},
+                0, NULL,                        1, -1, 2, 0, 0, 0, msetGenericCommandPreprocess},
 
         {"randomkey",   randomkeyCommand,   1,
                 "read-only random @keyspace",
@@ -672,11 +672,11 @@ struct redisCommand redisCommandTable[] = {
                 "write fast @keyspace @dangerous",
                 0, NULL,                        0, 0,  0, 0, 0, 0, NULL},
 
-        {"move",                 moveCommand,                3,
+        {"move",        moveCommand,        3,
                 "write fast @keyspace",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"copy",                 copyCommand,                -3,
+        {"copy",        copyCommand,        -3,
                 "write use-memory @keyspace",
                 0, NULL,                        1, 2,  1, 0, 0, 0, NULL},
 
