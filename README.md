@@ -3,8 +3,6 @@
 - mget
 - mset
 - msetnx
-- setrange
-- getrange
 
 # OK
 
@@ -23,6 +21,8 @@
 - incbyfloat
 - decr
 - decrby
+- setrange
+- getrange
 
 # 压测示例：
 
