@@ -147,6 +147,7 @@ client *createClient(connection *conn) {
     c->reqtype = 0;
     c->argc = 0;
     c->argv = NULL;
+    c->preprocess.hash_arr = NULL;
     c->argv_len_sum = 0;
     c->original_argc = 0;
     c->original_argv = NULL;
@@ -1483,15 +1484,18 @@ void freeClient(client *c) {
      * we lost the connection with the master. */
     if (c->flags & CLIENT_MASTER) replicationHandleMasterDisconnection();
 
-   /* Remove the contribution that this client gave to our
-     * incrementally computed memory usage. */
+    /* Remove the contribution that this client gave to our
+      * incrementally computed memory usage. */
     server.stat_clients_type_memory[c->client_cron_last_memory_type] -=
-        c->client_cron_last_memory_usage;
+            c->client_cron_last_memory_usage;
 
     /* Release other dynamically allocated client structure fields,
      * and finally release the client structure itself. */
     if (c->name) decrRefCount(c->name);
     zfree(c->argv);
+    if (c->preprocess.hash_arr) {
+        zfree(c->preprocess.hash_arr);
+    }
     c->argv_len_sum = 0;
     freeClientMultiState(c);
     sdsfree(c->peerid);
@@ -1843,13 +1847,15 @@ int processInlineBuffer(client *c) {
     /* Setup argv array on client structure */
     if (argc) {
         if (c->argv) zfree(c->argv);
-        c->argv = zmalloc(sizeof(robj*)*argc);
+        c->argv = zmalloc(sizeof(robj *) * argc);
+        if (c->preprocess.hash_arr)zfree(c->preprocess.hash_arr);
+        c->preprocess.hash_arr = zmalloc(sizeof(uint64_t) * argc);
         c->argv_len_sum = 0;
     }
 
     /* Create redis objects for all arguments. */
     for (c->argc = 0, j = 0; j < argc; j++) {
-        c->argv[c->argc] = createObjectWithHash(OBJ_STRING, argv[j]);
+        c->argv[c->argc] = createObject(OBJ_STRING, argv[j]);
         c->argc++;
         c->argv_len_sum += sdslen(argv[j]);
     }
@@ -1938,7 +1944,7 @@ int processMultibulkBuffer(client *c) {
             return C_ERR;
         }
 
-        c->qb_pos = (newline-c->querybuf)+2;
+        c->qb_pos = (newline - c->querybuf) + 2;
 
         if (ll <= 0) return C_OK;
 
@@ -1946,7 +1952,9 @@ int processMultibulkBuffer(client *c) {
 
         /* Setup argv array on client structure */
         if (c->argv) zfree(c->argv);
-        c->argv = zmalloc(sizeof(robj*)*c->multibulklen);
+        c->argv = zmalloc(sizeof(robj *) * c->multibulklen);
+        if (c->preprocess.hash_arr)zfree(c->preprocess.hash_arr);
+        c->preprocess.hash_arr = zmalloc(sizeof(uint64_t) * c->multibulklen);
         c->argv_len_sum = 0;
     }
 

@@ -914,8 +914,7 @@ void getrangeCommand(client *c) {
 void mgetCommandPreprocess(client *c) {
     int j;
     for (j = 1; j < c->argc; j++) {
-        objectWithHash *obj = (objectWithHash *) c->argv[j];
-        obj->hash = dictSdsHash(obj->obj.ptr);
+        c->preprocess.hash_arr[j] = dictSdsHash(c->argv[j]->ptr);
     }
 }
 
@@ -924,8 +923,7 @@ void mgetCommand(client *c) {
     if (c->preprocess.cmd_preprocessed) {
         addReplyArrayLen(c, c->argc - 1);
         for (j = 1; j < c->argc; j++) {
-            robj *argv = c->argv[j];
-            robj *o = lookupKeyReadWithHash(c->db, argv, ((objectWithHash *) argv)->hash);
+            robj *o = lookupKeyReadWithHash(c->db, c->argv[j], c->preprocess.hash_arr[j]);
             if (o == NULL) {
                 addReplyNull(c);
             } else {

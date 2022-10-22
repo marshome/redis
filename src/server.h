@@ -681,11 +681,6 @@ typedef struct redisObject {
     void *ptr;
 } robj;
 
-typedef struct objectWithHash {
-    robj obj;
-    uint64_t hash;
-} objectWithHash;
-
 /* The a string name for an object's type as listed above
  * Native types are checked against the OBJ_STRING, OBJ_LIST, OBJ_* defines,
  * and Module types have their registered name returned. */
@@ -867,6 +862,7 @@ typedef struct preprocessData {
     int cmd_preprocessed;
     int cmd_stopped;
     uint64_t key_hash;
+    uint64_t *hash_arr;
     robj *set_cmd_expire;
     int set_cmd_unit;
     int set_cmd_flags;
@@ -2024,9 +2020,6 @@ void freeZsetObject(robj *o);
 void freeHashObject(robj *o);
 
 robj *createObject(int type, void *ptr);
-
-robj *createObjectWithHash(int type, void *ptr);
-
 robj *createStringObject(const char *ptr, size_t len);
 robj *createRawStringObject(const char *ptr, size_t len);
 robj *createEmbeddedStringObject(const char *ptr, size_t len);

@@ -4321,7 +4321,7 @@ void preprocessCommand(client *c) {
 
     c->preprocess.cmd_preprocessed = 0;
     c->preprocess.cmd_stopped = 0;
-    if (c->cmd->preprocess_proc != NULL && c->reqtype != PROTO_REQ_MULTIBULK) {
+    if (c->cmd->preprocess_proc != NULL) {
         c->cmd->preprocess_proc(c);
         c->preprocess.cmd_preprocessed = 1;
     }
