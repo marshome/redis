@@ -147,7 +147,6 @@ client *createClient(connection *conn) {
     c->reqtype = 0;
     c->argc = 0;
     c->argv = NULL;
-    c->preprocess.hash_arr = NULL;
     c->argv_len_sum = 0;
     c->original_argc = 0;
     c->original_argv = NULL;
@@ -1493,9 +1492,6 @@ void freeClient(client *c) {
      * and finally release the client structure itself. */
     if (c->name) decrRefCount(c->name);
     zfree(c->argv);
-    if (c->preprocess.hash_arr) {
-        zfree(c->preprocess.hash_arr);
-    }
     c->argv_len_sum = 0;
     freeClientMultiState(c);
     sdsfree(c->peerid);
@@ -1847,9 +1843,7 @@ int processInlineBuffer(client *c) {
     /* Setup argv array on client structure */
     if (argc) {
         if (c->argv) zfree(c->argv);
-        c->argv = zmalloc(sizeof(robj *) * argc);
-        if (c->preprocess.hash_arr)zfree(c->preprocess.hash_arr);
-        c->preprocess.hash_arr = zmalloc(sizeof(uint64_t) * argc);
+        c->argv = zmalloc((sizeof(robj *) + sizeof(uint64_t)) * argc);
         c->argv_len_sum = 0;
     }
 
@@ -1952,9 +1946,7 @@ int processMultibulkBuffer(client *c) {
 
         /* Setup argv array on client structure */
         if (c->argv) zfree(c->argv);
-        c->argv = zmalloc(sizeof(robj *) * c->multibulklen);
-        if (c->preprocess.hash_arr)zfree(c->preprocess.hash_arr);
-        c->preprocess.hash_arr = zmalloc(sizeof(uint64_t) * c->multibulklen);
+        c->argv = zmalloc((sizeof(robj *) + sizeof(uint64_t)) * c->multibulklen);
         c->argv_len_sum = 0;
     }
 

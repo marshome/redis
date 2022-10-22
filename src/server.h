@@ -862,14 +862,12 @@ typedef struct preprocessData {
     int cmd_preprocessed;
     int cmd_stopped;
     uint64_t key_hash;
-    uint64_t *hash_arr;
     robj *set_cmd_expire;
     int set_cmd_unit;
     int set_cmd_flags;
     uint64_t setbit_cmd_bitoffset;
     long setbit_cmd_on;
 } preprocessData;
-
 
 typedef struct client {
     uint64_t id;            /* Client incremental unique ID. */

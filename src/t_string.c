@@ -914,7 +914,7 @@ void getrangeCommand(client *c) {
 void mgetCommandPreprocess(client *c) {
     int j;
     for (j = 1; j < c->argc; j++) {
-        c->preprocess.hash_arr[j] = dictSdsHash(c->argv[j]->ptr);
+        *(uint64_t *) &(c->argv[j + c->argc]) = dictSdsHash(c->argv[j]->ptr);
     }
 }
 
@@ -923,7 +923,7 @@ void mgetCommand(client *c) {
     if (c->preprocess.cmd_preprocessed) {
         addReplyArrayLen(c, c->argc - 1);
         for (j = 1; j < c->argc; j++) {
-            robj *o = lookupKeyReadWithHash(c->db, c->argv[j], c->preprocess.hash_arr[j]);
+            robj *o = lookupKeyReadWithHash(c->db, c->argv[j], (uint64_t) (c->argv[j + c->argc]));
             if (o == NULL) {
                 addReplyNull(c);
             } else {
@@ -954,7 +954,7 @@ void mgetCommand(client *c) {
 void msetGenericCommandPreprocess(client *c) {
     int j;
     for (j = 1; j < c->argc; j += 2) {
-        c->preprocess.hash_arr[j] = dictSdsHash(c->argv[j]->ptr);
+        *(uint64_t *) &(c->argv[j + c->argc]) = dictSdsHash(c->argv[j]->ptr);
     }
 }
 
@@ -971,7 +971,7 @@ void msetGenericCommand(client *c, int nx) {
         * set anything if at least one key already exists. */
         if (nx) {
             for (j = 1; j < c->argc; j += 2) {
-                if (lookupKeyWriteWithHash(c->db, c->argv[j], c->preprocess.hash_arr[j]) != NULL) {
+                if (lookupKeyWriteWithHash(c->db, c->argv[j], (uint64_t) (c->argv[c->argc + j])) != NULL) {
                     addReply(c, shared.czero);
                     return;
                 }
