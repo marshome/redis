@@ -353,7 +353,7 @@ void setCommandPreprocess(client *c) {
         c->preprocess.cmd_stopped = 1;
         return;
     }
-    c->preprocess.key_hash = dictSdsHash(c->argv[1]->ptr);
+    hashKeyPreprocess(c);
     c->argv[2] = tryObjectEncoding(c->argv[2]);
 }
 
@@ -388,7 +388,7 @@ void setCommand(client *c) {
 }
 
 void setnxCommandPreprocess(client *c) {
-    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
+    hashKeyPreprocess(c);
     c->argv[2] = tryObjectEncoding(c->argv[2]);
 }
 
@@ -410,7 +410,7 @@ void setnxCommand(client *c) {
 }
 
 void setexCommandPreprocess(client *c) {
-    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
+    hashKeyPreprocess(c);
     c->argv[3] = tryObjectEncoding(c->argv[3]);
 }
 
@@ -432,7 +432,7 @@ void setexCommand(client *c) {
 }
 
 void psetexCommandPreprocess(client *c) {
-    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
+    hashKeyPreprocess(c);
     c->argv[3] = tryObjectEncoding(c->argv[3]);
 }
 
@@ -502,7 +502,7 @@ void getexCommandPreprocess(client *c) {
         c->preprocess.cmd_stopped = 1;
         return;
     }
-    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
+    hashKeyPreprocess(c);
 }
 
 //ok

@@ -88,7 +88,7 @@ void emptyProc(client *c) {
 #pragma clang diagnostic pop
 
 void hashKeyPreprocess(client *c) {
-    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
+    c->preprocess.key_hash = dictSdsHash(c->argv[1]->ptr);
 }
 
 /* Our command table.
