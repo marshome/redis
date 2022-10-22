@@ -541,18 +541,16 @@ unsigned char *getObjectReadOnlyString(robj *o, long *len, char *llbuf) {
 
 void setbitCommandPreprocess(client *c) {
     char *err = "bit is not an integer or out of range";
-    uint64_t bitoffset;
-    long on;
-    if (getBitOffsetFromArgument(c, c->argv[2], &bitoffset, 0, 0) != C_OK) {
+    if (getBitOffsetFromArgument(c, c->argv[2], &c->preprocess.setbit_cmd_bitoffset, 0, 0) != C_OK) {
         c->preprocess.cmd_stopped = 1;
         return;
     }
-    if (getLongFromObjectOrReply(c, c->argv[3], &on, err) != C_OK) {
+    if (getLongFromObjectOrReply(c, c->argv[3], &c->preprocess.setbit_cmd_on, err) != C_OK) {
         c->preprocess.cmd_stopped = 1;
         return;
     }
     /* Bits can only be set or cleared... */
-    if (on & ~1) {
+    if (c->preprocess.setbit_cmd_on & ~1) {
         addReplyError(c, err);
         c->preprocess.cmd_stopped = 1;
         return;
