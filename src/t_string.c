@@ -253,6 +253,14 @@ int parseExtendedStringArgumentsOrReply(client *c, int *flags, int *unit, robj *
 }
 
 void setCommandPreprocess(client *c) {
+    if (parseExtendedStringArgumentsOrReply(c,
+                                            &c->preprocess.set_cmd_flags,
+                                            &c->preprocess.set_cmd_unit,
+                                            &c->preprocess.set_cmd_expire,
+                                            COMMAND_SET) != C_OK) {
+        c->preprocess.cmd_stopped = 1;
+        return;
+    }
     c->preprocess.key_hash = dictSdsHash(c->argv[1]);
     c->argv[2] = tryObjectEncoding(c->argv[2]);
 }
@@ -261,13 +269,17 @@ void setCommandPreprocess(client *c) {
  *     [EXAT <seconds-timestamp>][PXAT <milliseconds-timestamp>] */
 void setCommand(client *c) {
     if (c->preprocess.cmd_preprocessed) {
-        robj *expire = NULL;
-        int unit = UNIT_SECONDS;
-        int flags = OBJ_NO_FLAGS;
-        if (parseExtendedStringArgumentsOrReply(c, &flags, &unit, &expire, COMMAND_SET) != C_OK) {
+        if (c->preprocess.cmd_stopped) {
             return;
         }
-        setGenericCommand(c, flags, c->argv[1], c->argv[2], expire, unit, NULL, NULL);
+        setGenericCommand(c,
+                          c->preprocess.set_cmd_flags,
+                          c->argv[1],
+                          c->argv[2],
+                          c->preprocess.set_cmd_expire,
+                          c->preprocess.set_cmd_unit,
+                          NULL,
+                          NULL);
     } else {
         robj *expire = NULL;
         int unit = UNIT_SECONDS;

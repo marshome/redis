@@ -862,6 +862,9 @@ typedef struct preprocessData {
     int cmd_preprocessed;
     int cmd_stopped;
     uint64_t key_hash;
+    robj *set_cmd_expire;
+    int set_cmd_unit;
+    int set_cmd_flags;
 } preprocessData;
 
 

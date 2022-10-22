@@ -3988,6 +3988,8 @@ void afterCommand(client *c) {
 void preprocessCommand(client *c) {
     c->preprocess.stopped = 0;
     c->preprocess.err = 0;
+    c->preprocess.cmd_preprocessed = 0;
+    c->preprocess.cmd_stopped = 0;
 
     moduleCallCommandFilters(c);
 
@@ -4294,8 +4296,6 @@ void preprocessCommand(client *c) {
         return;
     }
 
-    c->preprocess.cmd_preprocessed = 0;
-    c->preprocess.cmd_stopped = 0;
     if (c->cmd->preprocess_proc != NULL) {
         c->cmd->preprocess_proc(c);
         c->preprocess.cmd_preprocessed = 1;
@@ -4325,20 +4325,6 @@ int processCommand(client *c) {
         serverAssert(!server.in_exec);
         serverAssert(!server.in_eval);
     }
-
-    int is_read_command = (c->cmd->flags & CMD_READONLY) ||
-                          (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_READONLY));
-    int is_write_command = (c->cmd->flags & CMD_WRITE) ||
-                           (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_WRITE));
-    int is_denyoom_command = (c->cmd->flags & CMD_DENYOOM) ||
-                             (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_DENYOOM));
-    int is_denystale_command = !(c->cmd->flags & CMD_STALE) ||
-                               (c->cmd->proc == execCommand && (c->mstate.cmd_inv_flags & CMD_STALE));
-    int is_denyloading_command = !(c->cmd->flags & CMD_LOADING) ||
-                                 (c->cmd->proc == execCommand && (c->mstate.cmd_inv_flags & CMD_LOADING));
-    int is_may_replicate_command = (c->cmd->flags & (CMD_WRITE | CMD_MAY_REPLICATE)) ||
-                                   (c->cmd->proc == execCommand &&
-                                    (c->mstate.cmd_flags & (CMD_WRITE | CMD_MAY_REPLICATE)));
 
     /* Exec the command */
     if (c->flags & CLIENT_MULTI &&
