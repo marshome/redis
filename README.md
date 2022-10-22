@@ -1,6 +1,5 @@
 # TODO
 
-- mget
 - mset
 - msetnx
 
@@ -23,6 +22,7 @@
 - decrby
 - setrange
 - getrange
+- mget
 
 # 压测示例：
 
