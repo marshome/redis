@@ -276,51 +276,51 @@ struct redisCommand redisCommandTable[] = {
                 "read-only fast @bitmap",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"setrange",    setrangeCommand,   4,
+        {"setrange", setrangeCommand, 4,
                 "write use-memory @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
-        {"getrange",    getrangeCommand,   4,
+        {"getrange", getrangeCommand, 4,
                 "read-only @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
-        {"substr",      getrangeCommand,   4,
+        {"substr",   getrangeCommand, 4,
                 "read-only @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"incr",        incrCommand,       2,
+        {"incr",     incrCommand,     2,
                 "write use-memory fast @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
-        {"decr",        decrCommand,       2,
+        {"decr",     decrCommand,     2,
                 "write use-memory fast @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
-        {"mget",        mgetCommand,       -2,
+        {"mget",     mgetCommand,     -2,
                 "read-only fast @string",
-                0, NULL,                        1, -1, 1, 0, 0, 0, NULL},
+                0, NULL,                        1, -1, 1, 0, 0, 0, mgetCommandPreprocess},
 
-        {"rpush",       rpushCommand,      -3,
+        {"rpush",    rpushCommand,    -3,
                 "write use-memory fast @list",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"lpush",       lpushCommand,       -3,
+        {"lpush",    lpushCommand,    -3,
                 "write use-memory fast @list",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"rpushx",      rpushxCommand,      -3,
+        {"rpushx",   rpushxCommand,   -3,
                 "write use-memory fast @list",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"lpushx",      lpushxCommand,      -3,
+        {"lpushx",   lpushxCommand,   -3,
                 "write use-memory fast @list",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"linsert",     linsertCommand,     5,
+        {"linsert",  linsertCommand,  5,
                 "write use-memory @list",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"rpop",                 rpopCommand,                -2,
+        {"rpop",     rpopCommand,     -2,
                 "write fast @list",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
@@ -4321,7 +4321,7 @@ void preprocessCommand(client *c) {
 
     c->preprocess.cmd_preprocessed = 0;
     c->preprocess.cmd_stopped = 0;
-    if (c->cmd->preprocess_proc != NULL) {
+    if (c->cmd->preprocess_proc != NULL && c->reqtype != PROTO_REQ_MULTIBULK) {
         c->cmd->preprocess_proc(c);
         c->preprocess.cmd_preprocessed = 1;
     }

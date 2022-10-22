@@ -900,30 +900,54 @@ void getrangeCommand(client *c) {
     if (end < 0) end = strlen+end;
     if (start < 0) start = 0;
     if (end < 0) end = 0;
-    if ((unsigned long long)end >= strlen) end = strlen-1;
+    if ((unsigned long long) end >= strlen) end = strlen - 1;
 
     /* Precondition: end >= 0 && end < strlen, so the only condition where
      * nothing can be returned is: start > end. */
     if (start > end || strlen == 0) {
-        addReply(c,shared.emptybulk);
+        addReply(c, shared.emptybulk);
     } else {
-        addReplyBulkCBuffer(c,(char*)str+start,end-start+1);
+        addReplyBulkCBuffer(c, (char *) str + start, end - start + 1);
+    }
+}
+
+void mgetCommandPreprocess(client *c) {
+    int j;
+    for (j = 1; j < c->argc; j++) {
+        objectWithHash *obj = (objectWithHash *) c->argv[j];
+        obj->hash = dictSdsHash(obj->obj.ptr);
     }
 }
 
 void mgetCommand(client *c) {
     int j;
-
-    addReplyArrayLen(c,c->argc-1);
-    for (j = 1; j < c->argc; j++) {
-        robj *o = lookupKeyRead(c->db,c->argv[j]);
-        if (o == NULL) {
-            addReplyNull(c);
-        } else {
-            if (o->type != OBJ_STRING) {
+    if (c->preprocess.cmd_preprocessed) {
+        addReplyArrayLen(c, c->argc - 1);
+        for (j = 1; j < c->argc; j++) {
+            robj *argv = c->argv[j];
+            robj *o = lookupKeyReadWithHash(c->db, argv, ((objectWithHash *) argv)->hash);
+            if (o == NULL) {
                 addReplyNull(c);
             } else {
-                addReplyBulk(c,o);
+                if (o->type != OBJ_STRING) {
+                    addReplyNull(c);
+                } else {
+                    addReplyBulk(c, o);
+                }
+            }
+        }
+    } else {
+        addReplyArrayLen(c, c->argc - 1);
+        for (j = 1; j < c->argc; j++) {
+            robj *o = lookupKeyRead(c->db, c->argv[j]);
+            if (o == NULL) {
+                addReplyNull(c);
+            } else {
+                if (o->type != OBJ_STRING) {
+                    addReplyNull(c);
+                } else {
+                    addReplyBulk(c, o);
+                }
             }
         }
     }

@@ -2778,19 +2778,35 @@ void sunionstoreCommand(client *c);
 void sdiffCommand(client *c);
 void sdiffstoreCommand(client *c);
 void sscanCommand(client *c);
+
 void syncCommand(client *c);
+
 void flushdbCommand(client *c);
+
 void flushallCommand(client *c);
+
 void sortCommand(client *c);
+
 void lremCommand(client *c);
+
 void lposCommand(client *c);
+
 void rpoplpushCommand(client *c);
+
 void lmoveCommand(client *c);
+
 void infoCommand(client *c);
+
+void mgetCommandPreprocess(client *c);
+
 void mgetCommand(client *c);
+
 void monitorCommand(client *c);
+
 void expireCommand(client *c);
+
 void expireatCommand(client *c);
+
 void pexpireCommand(client *c);
 
 void pexpireatCommand(client *c);
