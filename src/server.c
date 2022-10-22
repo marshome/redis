@@ -201,49 +201,49 @@ struct redisCommand redisCommandTable[] = {
                 "read-only fast @string",
                 0, NULL, 1, 1, 1, 0, 0, 0, NULL},
 
-        {"getex",                getexCommand,               -2,
+        {"getex",  getexCommand,  -2,
                 "write fast @string",
                 0, NULL, 1, 1, 1, 0, 0, 0, NULL},
 
-        {"getdel",               getdelCommand,              2,
+        {"getdel", getdelCommand, 2,
                 "write fast @string",
                 0, NULL, 1, 1, 1, 0, 0, 0, NULL},
 
         /* Note that we can't flag set as fast, since it may perform an
          * implicit DEL of a large key. */
-        {"set",                  setCommand,                 -3,
+        {"set",    setCommand,    -3,
                 "write use-memory @string",
                 0, NULL, 1, 1, 1, 0, 0, 0, setCommandPreprocess},
 
-        {"setnx",                setnxCommand,               3,
+        {"setnx",  setnxCommand,  3,
                 "write use-memory fast @string",
                 0, NULL, 1, 1, 1, 0, 0, 0, setnxCommandPreprocess},
 
-        {"setex",                setexCommand,               4,
+        {"setex",  setexCommand,  4,
                 "write use-memory @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, NULL},
+                0, NULL, 1, 1, 1, 0, 0, 0, setexCommandPreprocess},
 
-        {"psetex",               psetexCommand,              4,
+        {"psetex", psetexCommand, 4,
                 "write use-memory @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, NULL},
+                0, NULL, 1, 1, 1, 0, 0, 0, psetexCommandPreprocess},
 
-        {"append",               appendCommand,              3,
+        {"append", appendCommand, 3,
                 "write use-memory fast @string",
                 0, NULL, 1, 1, 1, 0, 0, 0, NULL},
 
-        {"strlen",               strlenCommand,              2,
+        {"strlen", strlenCommand, 2,
                 "read-only fast @string",
                 0, NULL, 1, 1, 1, 0, 0, 0, NULL},
 
-        {"del",                  delCommand,                 -2,
+        {"del",    delCommand,    -2,
                 "write @keyspace",
                 0, NULL,                        1, -1, 1, 0, 0, 0, NULL},
 
-        {"unlink",               unlinkCommand,              -2,
+        {"unlink", unlinkCommand, -2,
                 "write fast @keyspace",
                 0, NULL,                        1, -1, 1, 0, 0, 0, NULL},
 
-        {"exists",               existsCommand,              -2,
+        {"exists", existsCommand, -2,
                 "read-only fast @keyspace",
                 0, NULL,                        1, -1, 1, 0, 0, 0, NULL},
 

@@ -2549,7 +2549,11 @@ void setnxCommandPreprocess(client *c);
 
 void setnxCommand(client *c);
 
+void setexCommandPreprocess(client *c);
+
 void setexCommand(client *c);
+
+void psetexCommandPreprocess(client *c);
 
 void psetexCommand(client *c);
 
