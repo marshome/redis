@@ -160,7 +160,50 @@ robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) {
     server.stat_keyspace_hits++;
     return val;
 
-keymiss:
+    keymiss:
+    if (!(flags & LOOKUP_NONOTIFY)) {
+        notifyKeyspaceEvent(NOTIFY_KEY_MISS, "keymiss", key, db->id);
+    }
+    server.stat_keyspace_misses++;
+    return NULL;
+}
+
+//ok
+robj *lookupKeyReadWithFlagsWithHash(redisDb *db, robj *key, uint64_t hash, int flags) {
+    robj *val;
+
+    if (expireIfNeededWithHash(db, key, hash) == 1) {
+        /* If we are in the context of a master, expireIfNeeded() returns 1
+         * when the key is no longer valid, so we can return NULL ASAP. */
+        if (server.masterhost == NULL)
+            goto keymiss;
+
+        /* However if we are in the context of a slave, expireIfNeeded() will
+         * not really try to expire the key, it only returns information
+         * about the "logical" status of the key: key expiring is up to the
+         * master in order to have a consistent view of master's data set.
+         *
+         * However, if the command caller is not the master, and as additional
+         * safety measure, the command invoked is a read-only command, we can
+         * safely return NULL here, and provide a more consistent behavior
+         * to clients accessing expired values in a read-only fashion, that
+         * will say the key as non existing.
+         *
+         * Notably this covers GETs when slaves are used to scale reads. */
+        if (server.current_client &&
+            server.current_client != server.master &&
+            server.current_client->cmd &&
+            server.current_client->cmd->flags & CMD_READONLY) {
+            goto keymiss;
+        }
+    }
+    val = lookupKeyWithHash(db, key, hash, flags);
+    if (val == NULL)
+        goto keymiss;
+    server.stat_keyspace_hits++;
+    return val;
+
+    keymiss:
     if (!(flags & LOOKUP_NONOTIFY)) {
         notifyKeyspaceEvent(NOTIFY_KEY_MISS, "keymiss", key, db->id);
     }
@@ -171,7 +214,12 @@ keymiss:
 /* Like lookupKeyReadWithFlags(), but does not use any flag, which is the
  * common case. */
 robj *lookupKeyRead(redisDb *db, robj *key) {
-    return lookupKeyReadWithFlags(db,key,LOOKUP_NONE);
+    return lookupKeyReadWithFlags(db, key, LOOKUP_NONE);
+}
+
+//ok
+robj *lookupKeyReadWithHash(redisDb *db, robj *key, uint64_t hash) {
+    return lookupKeyReadWithFlagsWithHash(db, key, hash, LOOKUP_NONE);
 }
 
 /* Lookup a key for write operations, and as a side effect, if needed, expires
@@ -211,6 +259,13 @@ void SentReplyOnKeyMiss(client *c, robj *reply) {
 
 robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply) {
     robj *o = lookupKeyRead(c->db, key);
+    if (!o) SentReplyOnKeyMiss(c, reply);
+    return o;
+}
+
+//ok
+robj *lookupKeyReadOrReplyWithHash(client *c, robj *key, uint64_t hash, robj *reply) {
+    robj *o = lookupKeyReadWithHash(c->db, key, hash);
     if (!o) SentReplyOnKeyMiss(c, reply);
     return o;
 }

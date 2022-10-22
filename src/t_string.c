@@ -33,13 +33,15 @@
 /* Forward declarations */
 int getGenericCommand(client *c);
 
+int getGenericCommandWithHash(client *c, uint64_t hash);
+
 /*-----------------------------------------------------------------------------
  * String Commands
  *----------------------------------------------------------------------------*/
 
 static int checkStringLength(client *c, long long size) {
     if (!(c->flags & CLIENT_MASTER) && size > server.proto_max_bulk_len) {
-        addReplyError(c,"string exceeds maximum allowed size (proto-max-bulk-len)");
+        addReplyError(c, "string exceeds maximum allowed size (proto-max-bulk-len)");
         return C_ERR;
     }
     return C_OK;
@@ -150,6 +152,7 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
     }
 }
 
+//ok
 void setGenericCommandWithHash(client *c,
                                int flags,
                                robj *key,
@@ -180,14 +183,14 @@ void setGenericCommandWithHash(client *c,
         }
     }
 
-    if ((flags & OBJ_SET_NX && lookupKeyWrite(c->db, key) != NULL) ||
-        (flags & OBJ_SET_XX && lookupKeyWrite(c->db, key) == NULL)) {
+    if ((flags & OBJ_SET_NX && lookupKeyWriteWithHash(c->db, key, hash) != NULL) ||
+        (flags & OBJ_SET_XX && lookupKeyWriteWithHash(c->db, key, hash) == NULL)) {
         addReply(c, abort_reply ? abort_reply : shared.null[c->resp]);
         return;
     }
 
     if (flags & OBJ_SET_GET) {
-        if (getGenericCommand(c) == C_ERR) return;
+        if (getGenericCommandWithHash(c, hash) == C_ERR) return;
     }
 
     genericSetKeyWithHash(c, c->db, key, hash, val, flags & OBJ_KEEPTTL, 1);
@@ -224,9 +227,9 @@ void setGenericCommandWithHash(client *c,
             char *a = c->argv[j]->ptr;
             /* Skip GET which may be repeated multiple times. */
             if (j >= 3 &&
-                (a[0] == 'g' || a[0] == 'G') &&
-                (a[1] == 'e' || a[1] == 'E') &&
-                (a[2] == 't' || a[2] == 'T') && a[3] == '\0')
+                    (a[0] == 'g' || a[0] == 'G') &&
+                    (a[1] == 'e' || a[1] == 'E') &&
+                    (a[2] == 't' || a[2] == 'T') && a[3] == '\0')
                 continue;
             argv[argc++] = c->argv[j];
             incrRefCount(c->argv[j]);
@@ -456,11 +459,26 @@ int getGenericCommand(client *c) {
     if ((o = lookupKeyReadOrReply(c, c->argv[1], shared.null[c->resp])) == NULL)
         return C_OK;
 
-    if (checkType(c,o,OBJ_STRING)) {
+    if (checkType(c, o, OBJ_STRING)) {
         return C_ERR;
     }
 
-    addReplyBulk(c,o);
+    addReplyBulk(c, o);
+    return C_OK;
+}
+
+//ok
+int getGenericCommandWithHash(client *c, uint64_t hash) {
+    robj *o;
+
+    if ((o = lookupKeyReadOrReplyWithHash(c, c->argv[1], hash, shared.null[c->resp])) == NULL)
+        return C_OK;
+
+    if (checkType(c, o, OBJ_STRING)) {
+        return C_ERR;
+    }
+
+    addReplyBulk(c, o);
     return C_OK;
 }
 

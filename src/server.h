@@ -2422,15 +2422,21 @@ robj *lookupKey(redisDb *db, robj *key, int flags);
 
 robj *lookupKeyRead(redisDb *db, robj *key);
 
+robj *lookupKeyReadWithHash(redisDb *db, robj *key, uint64_t hash);
+
 robj *lookupKeyWrite(redisDb *db, robj *key);
 
 robj *lookupKeyWriteWithHash(redisDb *db, robj *key, uint64_t hash);
 
 robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply);
 
+robj *lookupKeyReadOrReplyWithHash(client *c, robj *key, uint64_t hash, robj *reply);
+
 robj *lookupKeyWriteOrReply(client *c, robj *key, robj *reply);
 
 robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags);
+
+robj *lookupKeyReadWithFlagsWithHash(redisDb *db, robj *key, uint64_t hash, int flags);
 
 robj *lookupKeyWriteWithFlags(redisDb *db, robj *key, int flags);
 
@@ -2645,39 +2651,42 @@ int performEvictions(void);
 /* Keys hashing / comparison functions for dict.c hash tables. */
 uint64_t dictSdsHash(const void *key);
 int dictSdsKeyCompare(void *privdata, const void *key1, const void *key2);
+
 void dictSdsDestructor(void *privdata, void *val);
 
 /* Git SHA1 */
 char *redisGitSHA1(void);
+
 char *redisGitDirty(void);
+
 uint64_t redisBuildId(void);
 
 char *redisBuildIdString(void);
 
 /* Commands prototypes */
-void authCommand(client *c);
+void authCommand(client *c);//skip
 
-void pingCommand(client *c);
+void pingCommand(client *c);//skip
 
-void echoCommand(client *c);
+void echoCommand(client *c);//skip
 
-void commandCommand(client *c);
+void commandCommand(client *c);//skip
 
 void setCommandPreprocess(client *c);
 
-void setCommand(client *c);
+void setCommand(client *c);//ok
 
 void setnxCommandPreprocess(client *c);
 
-void setnxCommand(client *c);
+void setnxCommand(client *c);//ok
 
 void setexCommandPreprocess(client *c);
 
-void setexCommand(client *c);
+void setexCommand(client *c);//ok
 
 void psetexCommandPreprocess(client *c);
 
-void psetexCommand(client *c);
+void psetexCommand(client *c);//ok
 
 void getCommand(client *c);
 
