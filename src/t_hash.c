@@ -102,6 +102,16 @@ sds hashTypeGetFromHashTable(robj *o, sds field) {
     return dictGetVal(de);
 }
 
+sds hashTypeGetFromHashTableWithHash(robj *o, sds field, uint64_t hash) {
+    dictEntry *de;
+
+    serverAssert(o->encoding == OBJ_ENCODING_HT);
+
+    de = dictFindWithHash(o->ptr, field, hash);
+    if (de == NULL) return NULL;
+    return dictGetVal(de);
+}
+
 /* Higher level function of hashTypeGet*() that returns the hash value
  * associated with the specified field. If the field is found C_OK
  * is returned, otherwise C_ERR. The returned object is returned by
@@ -803,13 +813,61 @@ static void addHashFieldToReply(client *c, robj *o, sds field) {
     }
 }
 
+static void addHashFieldToReplyWithHash(client *c, robj *o, sds field, uint64_t hash) {
+    int ret;
+
+    if (o == NULL) {
+        addReplyNull(c);
+        return;
+    }
+
+    if (o->encoding == OBJ_ENCODING_ZIPLIST) {
+        unsigned char *vstr = NULL;
+        unsigned int vlen = UINT_MAX;
+        long long vll = LLONG_MAX;
+
+        ret = hashTypeGetFromZiplist(o, field, &vstr, &vlen, &vll);
+        if (ret < 0) {
+            addReplyNull(c);
+        } else {
+            if (vstr) {
+                addReplyBulkCBuffer(c, vstr, vlen);
+            } else {
+                addReplyBulkLongLong(c, vll);
+            }
+        }
+
+    } else if (o->encoding == OBJ_ENCODING_HT) {
+        sds value = hashTypeGetFromHashTableWithHash(o, field, hash);
+        if (value == NULL)
+            addReplyNull(c);
+        else
+            addReplyBulkCBuffer(c, value, sdslen(value));
+    } else {
+        serverPanic("Unknown hash encoding");
+    }
+}
+
+void hgetCommandPreprocess(client *c) {
+    hashKeyPreprocess(c);
+    *(uint64_t *) &c->argv[2 + c->argc] = dictSdsHash(c->argv[2]->ptr);
+}
+
 void hgetCommand(client *c) {
     robj *o;
+    if (c->preprocess.cmd_preprocessed) {
+        if ((o = lookupKeyReadOrReplyWithHash(c, c->argv[1], c->preprocess.key_hash, shared.null[c->resp])) == NULL ||
+            checkType(c, o, OBJ_HASH))
+            return;
 
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.null[c->resp])) == NULL ||
-        checkType(c,o,OBJ_HASH)) return;
+        addHashFieldToReplyWithHash(c, o, c->argv[2]->ptr, (uint64_t) c->argv[2 + c->argc]);
+    } else {
+        if ((o = lookupKeyReadOrReply(c, c->argv[1], shared.null[c->resp])) == NULL ||
+            checkType(c, o, OBJ_HASH))
+            return;
 
-    addHashFieldToReply(c, o, c->argv[2]->ptr);
+        addHashFieldToReply(c, o, c->argv[2]->ptr);
+    }
 }
 
 void hmgetCommand(client *c) {

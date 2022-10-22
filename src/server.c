@@ -560,47 +560,47 @@ struct redisCommand redisCommandTable[] = {
                 "write fast @sortedset",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"bzpopmin",             bzpopminCommand,            -3,
+        {"bzpopmin",     bzpopminCommand,     -3,
                 "write no-script fast @sortedset @blocking",
                 0, NULL,                        1, -2, 1, 0, 0, 0, NULL},
 
-        {"bzpopmax",             bzpopmaxCommand,            -3,
+        {"bzpopmax",     bzpopmaxCommand,     -3,
                 "write no-script fast @sortedset @blocking",
                 0, NULL,                        1, -2, 1, 0, 0, 0, NULL},
 
-        {"zrandmember",          zrandmemberCommand,         -2,
+        {"zrandmember",  zrandmemberCommand,  -2,
                 "read-only random @sortedset",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"hset",                 hsetCommand,                -4,
+        {"hset",         hsetCommand,         -4,
                 "write use-memory fast @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"hsetnx",               hsetnxCommand,              4,
+        {"hsetnx",       hsetnxCommand,       4,
                 "write use-memory fast @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"hget",                 hgetCommand,                3,
+        {"hget",         hgetCommand,         3,
+                "read-only fast @hash",
+                0, NULL,                        1, 1,  1, 0, 0, 0, hgetCommandPreprocess},
+
+        {"hmset",        hsetCommand,         -4,
+                "write use-memory fast @hash",
+                0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
+
+        {"hmget",        hmgetCommand,        -3,
                 "read-only fast @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"hmset",                hsetCommand,                -4,
+        {"hincrby",      hincrbyCommand,      4,
                 "write use-memory fast @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"hmget",                hmgetCommand,               -3,
-                "read-only fast @hash",
-                0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
-
-        {"hincrby",              hincrbyCommand,             4,
+        {"hincrbyfloat", hincrbyfloatCommand, 4,
                 "write use-memory fast @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"hincrbyfloat",         hincrbyfloatCommand,        4,
-                "write use-memory fast @hash",
-                0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
-
-        {"hdel",                 hdelCommand,                -3,
+        {"hdel",         hdelCommand,         -3,
                 "write fast @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 

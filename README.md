@@ -1,8 +1,5 @@
 # TODO
 
-- mset
-- msetnx
-
 # OK
 
 - append
@@ -23,6 +20,10 @@
 - setrange
 - getrange
 - mget
+- mset
+- msetnx
+
+- hget
 
 # 压测示例：
 
