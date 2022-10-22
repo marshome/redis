@@ -952,9 +952,14 @@ void mgetCommand(client *c) {
 }
 
 void msetGenericCommandPreprocess(client *c) {
+    if ((c->argc % 2) == 0) {
+        return;
+    }
     int j;
     for (j = 1; j < c->argc; j += 2) {
         *(uint64_t *) &(c->argv[j + c->argc]) = dictSdsHash(c->argv[j]->ptr);
+    }
+    for (j = 1; j < c->argc; j += 2) {
         c->argv[j + 1] = tryObjectEncoding(c->argv[j + 1]);
     }
 }
@@ -979,7 +984,7 @@ void msetGenericCommand(client *c, int nx) {
             }
         }
         for (j = 1; j < c->argc; j += 2) {
-            setKeyWithHash(c, c->db, c->argv[j], (uint64_t) c->argv[c->argc + j], c->argv[j + 1]);
+            setKeyWithHash(c, c->db, c->argv[j], (uint64_t) (c->argv[c->argc + j]), c->argv[j + 1]);
             notifyKeyspaceEvent(NOTIFY_STRING, "set", c->argv[j], c->db->id);
         }
     } else {
