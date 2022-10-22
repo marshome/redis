@@ -4039,62 +4039,6 @@ void preprocessCommand(client *c) {
         return;
     }
 
-    int is_read_command = (c->cmd->flags & CMD_READONLY) ||
-                          (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_READONLY));
-    int is_write_command = (c->cmd->flags & CMD_WRITE) ||
-                           (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_WRITE));
-    int is_denyoom_command = (c->cmd->flags & CMD_DENYOOM) ||
-                             (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_DENYOOM));
-    int is_denystale_command = !(c->cmd->flags & CMD_STALE) ||
-                               (c->cmd->proc == execCommand && (c->mstate.cmd_inv_flags & CMD_STALE));
-    int is_denyloading_command = !(c->cmd->flags & CMD_LOADING) ||
-                                 (c->cmd->proc == execCommand && (c->mstate.cmd_inv_flags & CMD_LOADING));
-    int is_may_replicate_command = (c->cmd->flags & (CMD_WRITE | CMD_MAY_REPLICATE)) ||
-                                   (c->cmd->proc == execCommand &&
-                                    (c->mstate.cmd_flags & (CMD_WRITE | CMD_MAY_REPLICATE)));
-
-    if (authRequired(c)) {
-        /* AUTH and HELLO and no auth commands are valid even in
-         * non-authenticated state. */
-        if (!(c->cmd->flags & CMD_NO_AUTH)) {
-            rejectCommand(c, shared.noautherr);
-            c->preprocess.err = C_OK;
-            c->preprocess.stopped = 1;
-            return;
-        }
-    }
-
-    /* Check if the user can run this command according to the current
-     * ACLs. */
-    int acl_errpos;
-    int acl_retval = ACLCheckAllPerm(c, &acl_errpos);
-    if (acl_retval != ACL_OK) {
-        addACLLogEntry(c, acl_retval, acl_errpos, NULL);
-        switch (acl_retval) {
-            case ACL_DENIED_CMD:
-                rejectCommandFormat(c,
-                                    "-NOPERM this user has no permissions to run "
-                                    "the '%s' command or its subcommand", c->cmd->name);
-                break;
-            case ACL_DENIED_KEY:
-                rejectCommandFormat(c,
-                                    "-NOPERM this user has no permissions to access "
-                                    "one of the keys used as arguments");
-                break;
-            case ACL_DENIED_CHANNEL:
-                rejectCommandFormat(c,
-                                    "-NOPERM this user has no permissions to access "
-                                    "one of the channels used as arguments");
-                break;
-            default:
-                rejectCommandFormat(c, "no permission");
-                break;
-        }
-        c->preprocess.err = C_OK;
-        c->preprocess.stopped = 1;
-        return;
-    }
-
     c->preprocess.cmd_preprocessed = 0;
     c->preprocess.cmd_stopped = 0;
     if (c->cmd->preprocess_proc != NULL) {
@@ -4140,6 +4084,44 @@ int processCommand(client *c) {
     int is_may_replicate_command = (c->cmd->flags & (CMD_WRITE | CMD_MAY_REPLICATE)) ||
                                    (c->cmd->proc == execCommand &&
                                     (c->mstate.cmd_flags & (CMD_WRITE | CMD_MAY_REPLICATE)));
+
+    if (authRequired(c)) {
+        /* AUTH and HELLO and no auth commands are valid even in
+         * non-authenticated state. */
+        if (!(c->cmd->flags & CMD_NO_AUTH)) {
+            rejectCommand(c, shared.noautherr);
+            return C_OK;
+        }
+    }
+
+    /* Check if the user can run this command according to the current
+     * ACLs. */
+    int acl_errpos;
+    int acl_retval = ACLCheckAllPerm(c, &acl_errpos);
+    if (acl_retval != ACL_OK) {
+        addACLLogEntry(c, acl_retval, acl_errpos, NULL);
+        switch (acl_retval) {
+            case ACL_DENIED_CMD:
+                rejectCommandFormat(c,
+                                    "-NOPERM this user has no permissions to run "
+                                    "the '%s' command or its subcommand", c->cmd->name);
+                break;
+            case ACL_DENIED_KEY:
+                rejectCommandFormat(c,
+                                    "-NOPERM this user has no permissions to access "
+                                    "one of the keys used as arguments");
+                break;
+            case ACL_DENIED_CHANNEL:
+                rejectCommandFormat(c,
+                                    "-NOPERM this user has no permissions to access "
+                                    "one of the channels used as arguments");
+                break;
+            default:
+                rejectCommandFormat(c, "no permission");
+                break;
+        }
+        return C_OK;
+    }
 
     /* If cluster is enabled perform the cluster redirection here.
      * However we don't perform the redirection if:
