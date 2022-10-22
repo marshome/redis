@@ -1,13 +1,10 @@
 # TODO
 
-
-- getrange
-- lcs
 - mget
 - mset
 - msetnx
 - setrange
-- substr
+- getrange
 
 # OK
 
