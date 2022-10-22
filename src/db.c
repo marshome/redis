@@ -527,7 +527,18 @@ robj *dbUnshareStringValue(redisDb *db, robj *key, robj *o) {
         robj *decoded = getDecodedObject(o);
         o = createRawStringObject(decoded->ptr, sdslen(decoded->ptr));
         decrRefCount(decoded);
-        dbOverwrite(db,key,o);
+        dbOverwrite(db, key, o);
+    }
+    return o;
+}
+
+robj *dbUnshareStringValueWithHash(redisDb *db, robj *key, uint64_t hash, robj *o) {
+    serverAssert(o->type == OBJ_STRING);
+    if (o->refcount != 1 || o->encoding != OBJ_ENCODING_RAW) {
+        robj *decoded = getDecodedObject(o);
+        o = createRawStringObject(decoded->ptr, sdslen(decoded->ptr));
+        decrRefCount(decoded);
+        dbOverwriteWithHash(db, key, hash, o);
     }
     return o;
 }
@@ -539,14 +550,13 @@ robj *dbUnshareStringValue(redisDb *db, robj *key, robj *o) {
  * DB index if we want to empty only a single database.
  * The function returns the number of keys removed from the database(s). */
 long long emptyDbStructure(redisDb *dbarray, int dbnum, int async,
-                           void(callback)(void*))
-{
+                           void(callback)(void *)) {
     long long removed = 0;
     int startdb, enddb;
 
     if (dbnum == -1) {
         startdb = 0;
-        enddb = server.dbnum-1;
+        enddb = server.dbnum - 1;
     } else {
         startdb = enddb = dbnum;
     }

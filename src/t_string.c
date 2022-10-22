@@ -741,63 +741,124 @@ void getsetCommand(client *c) {
 }
 
 void setrangeCommand(client *c) {
-    robj *o;
-    long offset;
-    sds value = c->argv[3]->ptr;
+    if (c->preprocess.cmd_preprocessed) {
+        uint64_t hash = c->preprocess.key_hash;
+        robj *o;
+        long offset;
+        sds value = c->argv[3]->ptr;
 
-    if (getLongFromObjectOrReply(c,c->argv[2],&offset,NULL) != C_OK)
-        return;
+        if (getLongFromObjectOrReply(c, c->argv[2], &offset, NULL) != C_OK)
+            return;
 
-    if (offset < 0) {
-        addReplyError(c,"offset is out of range");
-        return;
-    }
-
-    o = lookupKeyWrite(c->db,c->argv[1]);
-    if (o == NULL) {
-        /* Return 0 when setting nothing on a non-existing string */
-        if (sdslen(value) == 0) {
-            addReply(c,shared.czero);
+        if (offset < 0) {
+            addReplyError(c, "offset is out of range");
             return;
         }
 
-        /* Return when the resulting string exceeds allowed size */
-        if (checkStringLength(c,offset+sdslen(value)) != C_OK)
-            return;
+        o = lookupKeyWriteWithHash(c->db, c->argv[1], hash);
+        if (o == NULL) {
+            /* Return 0 when setting nothing on a non-existing string */
+            if (sdslen(value) == 0) {
+                addReply(c, shared.czero);
+                return;
+            }
 
-        o = createObject(OBJ_STRING,sdsnewlen(NULL, offset+sdslen(value)));
-        dbAdd(c->db,c->argv[1],o);
+            /* Return when the resulting string exceeds allowed size */
+            if (checkStringLength(c, offset + sdslen(value)) != C_OK)
+                return;
+
+            o = createObject(OBJ_STRING, sdsnewlen(NULL, offset + sdslen(value)));
+            dbAddWithHash(c->db, c->argv[1], hash, o);
+        } else {
+            size_t olen;
+
+            /* Key exists, check type */
+            if (checkType(c, o, OBJ_STRING))
+                return;
+
+            /* Return existing string length when setting nothing */
+            olen = stringObjectLen(o);
+            if (sdslen(value) == 0) {
+                addReplyLongLong(c, olen);
+                return;
+            }
+
+            /* Return when the resulting string exceeds allowed size */
+            if (checkStringLength(c, offset + sdslen(value)) != C_OK)
+                return;
+
+            /* Create a copy when the object is shared or encoded. */
+            o = dbUnshareStringValueWithHash(c->db, c->argv[1], hash, o);
+        }
+
+        if (sdslen(value) > 0) {
+            o->ptr = sdsgrowzero(o->ptr, offset + sdslen(value));
+            memcpy((char *) o->ptr + offset, value, sdslen(value));
+            signalModifiedKeyWithHash(c, c->db, c->argv[1], hash);
+            notifyKeyspaceEvent(NOTIFY_STRING,
+                                "setrange", c->argv[1], c->db->id);
+            server.dirty++;
+        }
+        addReplyLongLong(c, sdslen(o->ptr));
     } else {
-        size_t olen;
+        robj *o;
+        long offset;
+        sds value = c->argv[3]->ptr;
 
-        /* Key exists, check type */
-        if (checkType(c,o,OBJ_STRING))
+        if (getLongFromObjectOrReply(c, c->argv[2], &offset, NULL) != C_OK)
             return;
 
-        /* Return existing string length when setting nothing */
-        olen = stringObjectLen(o);
-        if (sdslen(value) == 0) {
-            addReplyLongLong(c,olen);
+        if (offset < 0) {
+            addReplyError(c, "offset is out of range");
             return;
         }
 
-        /* Return when the resulting string exceeds allowed size */
-        if (checkStringLength(c,offset+sdslen(value)) != C_OK)
-            return;
+        o = lookupKeyWrite(c->db, c->argv[1]);
+        if (o == NULL) {
+            /* Return 0 when setting nothing on a non-existing string */
+            if (sdslen(value) == 0) {
+                addReply(c, shared.czero);
+                return;
+            }
 
-        /* Create a copy when the object is shared or encoded. */
-        o = dbUnshareStringValue(c->db,c->argv[1],o);
-    }
+            /* Return when the resulting string exceeds allowed size */
+            if (checkStringLength(c, offset + sdslen(value)) != C_OK)
+                return;
 
-    if (sdslen(value) > 0) {
-        o->ptr = sdsgrowzero(o->ptr,offset+sdslen(value));
-        memcpy((char*)o->ptr+offset,value,sdslen(value));
-        signalModifiedKey(c,c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_STRING,
-            "setrange",c->argv[1],c->db->id);
-        server.dirty++;
+            o = createObject(OBJ_STRING, sdsnewlen(NULL, offset + sdslen(value)));
+            dbAdd(c->db, c->argv[1], o);
+        } else {
+            size_t olen;
+
+            /* Key exists, check type */
+            if (checkType(c, o, OBJ_STRING))
+                return;
+
+            /* Return existing string length when setting nothing */
+            olen = stringObjectLen(o);
+            if (sdslen(value) == 0) {
+                addReplyLongLong(c, olen);
+                return;
+            }
+
+            /* Return when the resulting string exceeds allowed size */
+            if (checkStringLength(c, offset + sdslen(value)) != C_OK)
+                return;
+
+            /* Create a copy when the object is shared or encoded. */
+            o = dbUnshareStringValue(c->db, c->argv[1], o);
+        }
+
+        if (sdslen(value) > 0) {
+            o->ptr = sdsgrowzero(o->ptr, offset + sdslen(value));
+            memcpy((char *) o->ptr + offset, value, sdslen(value));
+            signalModifiedKey(c, c->db, c->argv[1]);
+            notifyKeyspaceEvent(NOTIFY_STRING,
+                                "setrange", c->argv[1], c->db->id);
+            server.dirty++;
+        }
+        addReplyLongLong(c, sdslen(o->ptr));
     }
-    addReplyLongLong(c,sdslen(o->ptr));
 }
 
 void getrangeCommand(client *c) {
@@ -806,16 +867,25 @@ void getrangeCommand(client *c) {
     char *str, llbuf[32];
     size_t strlen;
 
-    if (getLongLongFromObjectOrReply(c,c->argv[2],&start,NULL) != C_OK)
+    if (getLongLongFromObjectOrReply(c, c->argv[2], &start, NULL) != C_OK)
         return;
-    if (getLongLongFromObjectOrReply(c,c->argv[3],&end,NULL) != C_OK)
+    if (getLongLongFromObjectOrReply(c, c->argv[3], &end, NULL) != C_OK)
         return;
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.emptybulk)) == NULL ||
-        checkType(c,o,OBJ_STRING)) return;
-
+    if (c->preprocess.cmd_preprocessed) {
+        uint64_t hash = c->preprocess.key_hash;
+        if ((o = lookupKeyReadOrReplyWithHash(c, c->argv[1], hash, shared.emptybulk)) == NULL ||
+            checkType(c, o, OBJ_STRING)) {
+            return;
+        }
+    } else {
+        if ((o = lookupKeyReadOrReply(c, c->argv[1], shared.emptybulk)) == NULL ||
+            checkType(c, o, OBJ_STRING)) {
+            return;
+        }
+    }
     if (o->encoding == OBJ_ENCODING_INT) {
         str = llbuf;
-        strlen = ll2string(llbuf,sizeof(llbuf),(long)o->ptr);
+        strlen = ll2string(llbuf, sizeof(llbuf), (long) o->ptr);
     } else {
         str = o->ptr;
         strlen = sdslen(str);

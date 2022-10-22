@@ -2485,6 +2485,8 @@ int dbDelete(redisDb *db, robj *key);
 
 robj *dbUnshareStringValue(redisDb *db, robj *key, robj *o);
 
+robj *dbUnshareStringValueWithHash(redisDb *db, robj *key, uint64_t hash, robj *o);
+
 #define EMPTYDB_NO_FLAGS 0      /* No flags. */
 #define EMPTYDB_ASYNC (1<<0)    /* Reclaim memory in another thread. */
 

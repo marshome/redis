@@ -256,51 +256,51 @@ struct redisCommand redisCommandTable[] = {
                 "write fast @keyspace",
                 0, NULL,                        1, -1, 1, 0, 0, 0, emptyProc},//TODO
 
-        {"exists",               existsCommand,              -2,
+        {"exists",      existsCommand,     -2,
                 "read-only fast @keyspace",
                 0, NULL,                        1, -1, 1, 0, 0, 0, emptyProc},//TODO
 
-        {"setbit",               setbitCommand,              4,
+        {"setbit",      setbitCommand,     4,
                 "write use-memory @bitmap",
                 0, NULL,                        1, 1,  1, 0, 0, 0, setbitCommandPreprocess},
 
-        {"getbit",               getbitCommand,              3,
+        {"getbit",      getbitCommand,     3,
                 "read-only fast @bitmap",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"bitfield",    bitfieldCommand,    -2,
+        {"bitfield",    bitfieldCommand,   -2,
                 "write use-memory @bitmap",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"bitfield_ro", bitfieldroCommand,  -2,
+        {"bitfield_ro", bitfieldroCommand, -2,
                 "read-only fast @bitmap",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"setrange",    setrangeCommand,    4,
+        {"setrange",    setrangeCommand,   4,
                 "write use-memory @string",
-                0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
+                0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
-        {"getrange",    getrangeCommand,    4,
+        {"getrange",    getrangeCommand,   4,
+                "read-only @string",
+                0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
+
+        {"substr",      getrangeCommand,   4,
                 "read-only @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"substr",      getrangeCommand,    4,
-                "read-only @string",
-                0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
-
-        {"incr",        incrCommand,        2,
+        {"incr",        incrCommand,       2,
                 "write use-memory fast @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
-        {"decr",        decrCommand,        2,
+        {"decr",        decrCommand,       2,
                 "write use-memory fast @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
-        {"mget",        mgetCommand,        -2,
+        {"mget",        mgetCommand,       -2,
                 "read-only fast @string",
                 0, NULL,                        1, -1, 1, 0, 0, 0, NULL},
 
-        {"rpush",       rpushCommand,       -3,
+        {"rpush",       rpushCommand,      -3,
                 "write use-memory fast @list",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
