@@ -253,6 +253,9 @@ int parseExtendedStringArgumentsOrReply(client *c, int *flags, int *unit, robj *
 }
 
 void setCommandPreprocess(client *c) {
+    c->preprocess.set_cmd_expire = NULL;
+    c->preprocess.set_cmd_unit = UNIT_SECONDS;
+    c->preprocess.set_cmd_flags = OBJ_NO_FLAGS;
     if (parseExtendedStringArgumentsOrReply(c,
                                             &c->preprocess.set_cmd_flags,
                                             &c->preprocess.set_cmd_unit,
