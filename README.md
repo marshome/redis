@@ -1,11 +1,7 @@
 # TODO
 
-- decr
-- decrby
+
 - getrange
-- incr
-- incby
-- incbyfloat
 - lcs
 - mget
 - mset
@@ -25,6 +21,11 @@
 - getdel
 - getex
 - getset
+- incr
+- incby
+- incbyfloat
+- decr
+- decrby
 
 # 压测示例：
 

@@ -268,55 +268,55 @@ struct redisCommand redisCommandTable[] = {
                 "read-only fast @bitmap",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"bitfield",             bitfieldCommand,            -2,
+        {"bitfield",    bitfieldCommand,    -2,
                 "write use-memory @bitmap",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"bitfield_ro",          bitfieldroCommand,          -2,
+        {"bitfield_ro", bitfieldroCommand,  -2,
                 "read-only fast @bitmap",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"setrange",             setrangeCommand,            4,
+        {"setrange",    setrangeCommand,    4,
                 "write use-memory @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"getrange",             getrangeCommand,            4,
+        {"getrange",    getrangeCommand,    4,
                 "read-only @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"substr",               getrangeCommand,            4,
+        {"substr",      getrangeCommand,    4,
                 "read-only @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"incr",                 incrCommand,                2,
+        {"incr",        incrCommand,        2,
                 "write use-memory fast @string",
-                0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
+                0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
-        {"decr",                 decrCommand,                2,
+        {"decr",        decrCommand,        2,
                 "write use-memory fast @string",
-                0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
+                0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
-        {"mget",                 mgetCommand,                -2,
+        {"mget",        mgetCommand,        -2,
                 "read-only fast @string",
                 0, NULL,                        1, -1, 1, 0, 0, 0, NULL},
 
-        {"rpush",                rpushCommand,               -3,
+        {"rpush",       rpushCommand,       -3,
                 "write use-memory fast @list",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"lpush",                lpushCommand,               -3,
+        {"lpush",       lpushCommand,       -3,
                 "write use-memory fast @list",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"rpushx",               rpushxCommand,              -3,
+        {"rpushx",      rpushxCommand,      -3,
                 "write use-memory fast @list",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"lpushx",               lpushxCommand,              -3,
+        {"lpushx",      lpushxCommand,      -3,
                 "write use-memory fast @list",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"linsert",              linsertCommand,             5,
+        {"linsert",     linsertCommand,     5,
                 "write use-memory @list",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
@@ -616,15 +616,15 @@ struct redisCommand redisCommandTable[] = {
                 "read-only to-sort @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"hvals",                hvalsCommand,               2,
+        {"hvals",       hvalsCommand,       2,
                 "read-only to-sort @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"hgetall",              hgetallCommand,             2,
+        {"hgetall",     hgetallCommand,     2,
                 "read-only random @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"hexists",              hexistsCommand,             3,
+        {"hexists",     hexistsCommand,     3,
                 "read-only fast @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
@@ -638,15 +638,15 @@ struct redisCommand redisCommandTable[] = {
 
         {"incrby",      incrbyCommand,      3,
                 "write use-memory fast @string",
-                0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
+                0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
         {"decrby",      decrbyCommand,      3,
                 "write use-memory fast @string",
-                0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
+                0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
         {"incrbyfloat", incrbyfloatCommand, 3,
                 "write use-memory fast @string",
-                0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
+                0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
         {"getset",      getsetCommand,      3,
                 "write use-memory fast @string",
