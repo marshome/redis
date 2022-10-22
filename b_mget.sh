@@ -1,0 +1,1 @@
+./src/redis-benchmark -c 4 -n 100000 mget key1 key2

@@ -1,0 +1,1 @@
+./src/redis-benchmark -c 4 -n 100000 msetnx key1 val1 key2 val2 key3 val3
