@@ -1527,13 +1527,28 @@ void setExpire(client *c, redisDb *db, robj *key, long long when) {
 
     /* Reuse the sds from the main dict in the expire dict */
     kde = dictFind(db->dict, key->ptr);
-    serverAssertWithInfo(NULL,key,kde != NULL);
-    de = dictAddOrFind(db->expires,dictGetKey(kde));
-    dictSetSignedIntegerVal(de,when);
+    serverAssertWithInfo(NULL, key, kde != NULL);
+    de = dictAddOrFind(db->expires, dictGetKey(kde));
+    dictSetSignedIntegerVal(de, when);
 
     int writable_slave = server.masterhost && server.repl_slave_ro == 0;
     if (c && writable_slave && !(c->flags & CLIENT_MASTER))
-        rememberSlaveKeyWithExpire(db,key);
+        rememberSlaveKeyWithExpire(db, key);
+}
+
+//ok
+void setExpireWithHash(client *c, redisDb *db, robj *key, uint64_t hash, long long when) {
+    dictEntry *kde, *de;
+
+    /* Reuse the sds from the main dict in the expire dict */
+    kde = dictFindWithHash(db->dict, key->ptr, hash);
+    serverAssertWithInfo(NULL, key, kde != NULL);
+    de = dictAddOrFindWithHash(db->expires, dictGetKey(kde), hash);
+    dictSetSignedIntegerVal(de, when);
+
+    int writable_slave = server.masterhost && server.repl_slave_ro == 0;
+    if (c && writable_slave && !(c->flags & CLIENT_MASTER))
+        rememberSlaveKeyWithExpireWithHash(db, key, hash);
 }
 
 /* Return the expire time of the specified key, or -1 if no expire

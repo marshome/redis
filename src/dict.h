@@ -177,6 +177,8 @@ dictEntry *dictAddRawWithHash(dict *d, void *key, uint64_t hash, dictEntry **exi
 
 dictEntry *dictAddOrFind(dict *d, void *key);
 
+dictEntry *dictAddOrFindWithHash(dict *d, void *key, uint64_t hash);
+
 int dictReplace(dict *d, void *key, void *val);
 
 int dictDelete(dict *d, const void *key);

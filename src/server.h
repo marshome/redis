@@ -2414,6 +2414,8 @@ long long getExpireWithHash(redisDb *db, robj *key, uint64_t hash);
 
 void setExpire(client *c, redisDb *db, robj *key, long long when);
 
+void setExpireWithHash(client *c, redisDb *db, robj *key, uint64_t hash, long long when);
+
 int checkAlreadyExpired(long long when);
 
 robj *lookupKey(redisDb *db, robj *key, int flags);
@@ -2620,7 +2622,11 @@ int clientsCronHandleTimeout(client *c, mstime_t now_ms);
 /* expire.c -- Handling of expired keys */
 void activeExpireCycle(int type);
 void expireSlaveKeys(void);
+
 void rememberSlaveKeyWithExpire(redisDb *db, robj *key);
+
+void rememberSlaveKeyWithExpireWithHash(redisDb *db, robj *key, uint64_t hash);
+
 void flushSlaveKeysWithExpireList(void);
 size_t getSlaveKeyWithExpireCount(void);
 

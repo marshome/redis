@@ -437,12 +437,43 @@ void rememberSlaveKeyWithExpire(redisDb *db, robj *key) {
      * as it scans to find keys to remove. */
     if (de->key == key->ptr) {
         de->key = sdsdup(key->ptr);
-        dictSetUnsignedIntegerVal(de,0);
+        dictSetUnsignedIntegerVal(de, 0);
     }
 
     uint64_t dbids = dictGetUnsignedIntegerVal(de);
-    dbids |= (uint64_t)1 << db->id;
-    dictSetUnsignedIntegerVal(de,dbids);
+    dbids |= (uint64_t) 1 << db->id;
+    dictSetUnsignedIntegerVal(de, dbids);
+}
+
+//ok
+void rememberSlaveKeyWithExpireWithHash(redisDb *db, robj *key, uint64_t hash) {
+    if (slaveKeysWithExpire == NULL) {
+        static dictType dt = {
+                dictSdsHash,                /* hash function */
+                NULL,                       /* key dup */
+                NULL,                       /* val dup */
+                dictSdsKeyCompare,          /* key compare */
+                dictSdsDestructor,          /* key destructor */
+                NULL,                       /* val destructor */
+                NULL                        /* allow to expand */
+        };
+        slaveKeysWithExpire = dictCreate(&dt, NULL);
+    }
+    if (db->id > 63) return;
+
+    dictEntry *de = dictAddOrFindWithHash(slaveKeysWithExpire, key->ptr, hash);
+    /* If the entry was just created, set it to a copy of the SDS string
+     * representing the key: we don't want to need to take those keys
+     * in sync with the main DB. The keys will be removed by expireSlaveKeys()
+     * as it scans to find keys to remove. */
+    if (de->key == key->ptr) {
+        de->key = sdsdup(key->ptr);
+        dictSetUnsignedIntegerVal(de, 0);
+    }
+
+    uint64_t dbids = dictGetUnsignedIntegerVal(de);
+    dbids |= (uint64_t) 1 << db->id;
+    dictSetUnsignedIntegerVal(de, dbids);
 }
 
 /* Return the number of keys we are tracking. */

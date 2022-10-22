@@ -194,7 +194,7 @@ void setGenericCommandWithHash(client *c,
     server.dirty++;
     notifyKeyspaceEvent(NOTIFY_STRING, "set", key, c->db->id);
     if (expire) {
-        setExpire(c, c->db, key, when);
+        setExpireWithHash(c, c->db, key, hash, when);
         notifyKeyspaceEvent(NOTIFY_GENERIC, "expire", key, c->db->id);
 
         /* Propagate as SET Key Value PXAT millisecond-timestamp if there is EXAT/PXAT or

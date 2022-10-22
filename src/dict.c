@@ -416,7 +416,14 @@ int dictReplace(dict *d, void *key, void *val) {
  * See dictAddRaw() for more information. */
 dictEntry *dictAddOrFind(dict *d, void *key) {
     dictEntry *entry, *existing;
-    entry = dictAddRaw(d,key,&existing);
+    entry = dictAddRaw(d, key, &existing);
+    return entry ? entry : existing;
+}
+
+//ok
+dictEntry *dictAddOrFindWithHash(dict *d, void *key, uint64_t hash) {
+    dictEntry *entry, *existing;
+    entry = dictAddRawWithHash(d, key, hash, &existing);
     return entry ? entry : existing;
 }
 
