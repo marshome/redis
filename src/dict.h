@@ -162,25 +162,57 @@ typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
 
 /* API */
 dict *dictCreate(dictType *type, void *privDataPtr);
+
 int dictExpand(dict *d, unsigned long size);
+
 int dictTryExpand(dict *d, unsigned long size);
+
 int dictAdd(dict *d, void *key, void *val);
+
+int dictAddWithHash(dict *d, void *key, uint64_t hash, void *val);
+
 dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing);
+
+dictEntry *dictAddRawWithHash(dict *d, void *key, uint64_t hash, dictEntry **existing);
+
 dictEntry *dictAddOrFind(dict *d, void *key);
+
 int dictReplace(dict *d, void *key, void *val);
+
 int dictDelete(dict *d, const void *key);
+
+int dictDeleteWithHash(dict *ht, const void *key, uint64_t hash);
+
 dictEntry *dictUnlink(dict *ht, const void *key);
+
+dictEntry *dictUnlinkWithHash(dict *ht, const void *key, uint64_t hash);
+
 void dictFreeUnlinkedEntry(dict *d, dictEntry *he);
+
 void dictRelease(dict *d);
-dictEntry * dictFind(dict *d, const void *key);
+
+dictEntry *dictFind(dict *d, const void *key);
+
+dictEntry *dictFindWithHash(dict *d, const void *key, uint64_t hash);
+
 void *dictFetchValue(dict *d, const void *key);
+
+void *dictFetchValueWithHash(dict *d, const void *key, uint64_t hash);
+
 int dictResize(dict *d);
+
 dictIterator *dictGetIterator(dict *d);
+
 dictIterator *dictGetSafeIterator(dict *d);
+
 dictEntry *dictNext(dictIterator *iter);
+
 void dictReleaseIterator(dictIterator *iter);
+
 dictEntry *dictGetRandomKey(dict *d);
+
 dictEntry *dictGetFairRandomKey(dict *d);
+
 unsigned int dictGetSomeKeys(dict *d, dictEntry **des, unsigned int count);
 void dictGetStats(char *buf, size_t bufsize, dict *d);
 uint64_t dictGenHashFunction(const void *key, int len);

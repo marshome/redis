@@ -190,7 +190,7 @@ void setGenericCommandWithHash(client *c,
         if (getGenericCommand(c) == C_ERR) return;
     }
 
-    genericSetKey(c, c->db, key, val, flags & OBJ_KEEPTTL, 1);
+    genericSetKeyWithHash(c, c->db, key, hash, val, flags & OBJ_KEEPTTL, 1);
     server.dirty++;
     notifyKeyspaceEvent(NOTIFY_STRING, "set", key, c->db->id);
     if (expire) {

@@ -178,7 +178,51 @@ int dbAsyncDelete(redisDb *db, robj *key) {
     /* Release the key-val pair, or just the key if we set the val
      * field to NULL in order to lazy free it later. */
     if (de) {
-        dictFreeUnlinkedEntry(db->dict,de);
+        dictFreeUnlinkedEntry(db->dict, de);
+        if (server.cluster_enabled) slotToKeyDel(key->ptr);
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+//ok
+int dbAsyncDeleteWithHash(redisDb *db, robj *key, uint64_t hash) {
+    /* Deleting an entry from the expires dict will not free the sds of
+     * the key, because it is shared with the main dictionary. */
+    if (dictSize(db->expires) > 0) dictDeleteWithHash(db->expires, key->ptr, hash);
+
+    /* If the value is composed of a few allocations, to free in a lazy way
+     * is actually just slower... So under a certain limit we just free
+     * the object synchronously. */
+    dictEntry *de = dictUnlinkWithHash(db->dict, key->ptr, hash);
+    if (de) {
+        robj *val = dictGetVal(de);
+
+        /* Tells the module that the key has been unlinked from the database. */
+        moduleNotifyKeyUnlink(key, val);
+
+        size_t free_effort = lazyfreeGetFreeEffort(key, val);
+
+        /* If releasing the object is too much work, do it in the background
+         * by adding the object to the lazy free list.
+         * Note that if the object is shared, to reclaim it now it is not
+         * possible. This rarely happens, however sometimes the implementation
+         * of parts of the Redis core may call incrRefCount() to protect
+         * objects, and then call dbDelete(). In this case we'll fall
+         * through and reach the dictFreeUnlinkedEntry() call, that will be
+         * equivalent to just calling decrRefCount(). */
+        if (free_effort > LAZYFREE_THRESHOLD && val->refcount == 1) {
+            atomicIncr(lazyfree_objects, 1);
+            bioCreateLazyFreeJob(lazyfreeFreeObject, 1, val);
+            dictSetVal(db->dict, de, NULL);
+        }
+    }
+
+    /* Release the key-val pair, or just the key if we set the val
+     * field to NULL in order to lazy free it later. */
+    if (de) {
+        dictFreeUnlinkedEntry(db->dict, de);
         if (server.cluster_enabled) slotToKeyDel(key->ptr);
         return 1;
     } else {
@@ -188,10 +232,10 @@ int dbAsyncDelete(redisDb *db, robj *key) {
 
 /* Free an object, if the object is huge enough, free it in async way. */
 void freeObjAsync(robj *key, robj *obj) {
-    size_t free_effort = lazyfreeGetFreeEffort(key,obj);
+    size_t free_effort = lazyfreeGetFreeEffort(key, obj);
     if (free_effort > LAZYFREE_THRESHOLD && obj->refcount == 1) {
-        atomicIncr(lazyfree_objects,1);
-        bioCreateLazyFreeJob(lazyfreeFreeObject,1,obj);
+        atomicIncr(lazyfree_objects, 1);
+        bioCreateLazyFreeJob(lazyfreeFreeObject, 1, obj);
     } else {
         decrRefCount(obj);
     }

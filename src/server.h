@@ -1968,23 +1968,40 @@ void listTypeDelete(listTypeIterator *iter, listTypeEntry *entry);
 void listTypeConvert(robj *subject, int enc);
 robj *listTypeDup(robj *o);
 void unblockClientWaitingData(client *c);
+
 void popGenericCommand(client *c, int where);
+
 void listElementsRemoved(client *c, robj *key, int where, robj *o, long count);
 
 /* MULTI/EXEC/WATCH... */
 void unwatchAllKeys(client *c);
+
 void initClientMultiState(client *c);
+
 void freeClientMultiState(client *c);
+
 void queueMultiCommand(client *c);
+
 void touchWatchedKey(redisDb *db, robj *key);
+
+void touchWatchedKeyWithHash(redisDb *db, robj *key, uint64_t hash);
+
 int isWatchedKeyExpired(client *c);
+
 void touchAllWatchedKeysInDb(redisDb *emptied, redisDb *replaced_with);
+
 void discardTransaction(client *c);
+
 void flagTransaction(client *c);
+
 void execCommandAbort(client *c, sds error);
+
 void execCommandPropagateMulti(int dbid);
+
 void execCommandPropagateExec(int dbid);
+
 void beforePropagateMulti();
+
 void afterPropagateExec();
 
 /* Redis object implementation */
@@ -2365,73 +2382,155 @@ void appendServerSaveParams(time_t seconds, int changes);
 void resetServerSaveParams(void);
 struct rewriteConfigState; /* Forward declaration to export API. */
 void rewriteConfigRewriteLine(struct rewriteConfigState *state, const char *option, sds line, int force);
+
 void rewriteConfigMarkAsProcessed(struct rewriteConfigState *state, const char *option);
+
 int rewriteConfig(char *path, int force_all);
+
 void initConfigValues();
 
 /* db.c -- Keyspace access API */
 int removeExpire(redisDb *db, robj *key);
+
+int removeExpireWithHash(redisDb *db, robj *key, uint64_t hash);
+
 void deleteExpiredKeyAndPropagate(redisDb *db, robj *keyobj);
+
+void deleteExpiredKeyAndPropagateWithHash(redisDb *db, robj *keyobj, uint64_t hash);
+
 void propagateExpire(redisDb *db, robj *key, int lazy);
+
 int keyIsExpired(redisDb *db, robj *key);
+
+int keyIsExpiredWithHash(redisDb *db, robj *key, uint64_t hash);
+
 int expireIfNeeded(redisDb *db, robj *key);
+
+int expireIfNeededWithHash(redisDb *db, robj *key, uint64_t hash);
+
 long long getExpire(redisDb *db, robj *key);
+
+long long getExpireWithHash(redisDb *db, robj *key, uint64_t hash);
+
 void setExpire(client *c, redisDb *db, robj *key, long long when);
+
 int checkAlreadyExpired(long long when);
+
 robj *lookupKey(redisDb *db, robj *key, int flags);
+
 robj *lookupKeyRead(redisDb *db, robj *key);
+
 robj *lookupKeyWrite(redisDb *db, robj *key);
+
+robj *lookupKeyWriteWithHash(redisDb *db, robj *key, uint64_t hash);
+
 robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply);
+
 robj *lookupKeyWriteOrReply(client *c, robj *key, robj *reply);
+
 robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags);
+
 robj *lookupKeyWriteWithFlags(redisDb *db, robj *key, int flags);
+
+robj *lookupKeyWriteWithFlagsWithHash(redisDb *db, robj *key, uint64_t hash, int flags);
+
 robj *objectCommandLookup(client *c, robj *key);
+
 robj *objectCommandLookupOrReply(client *c, robj *key, robj *reply);
+
 void SentReplyOnKeyMiss(client *c, robj *reply);
+
 int objectSetLRUOrLFU(robj *val, long long lfu_freq, long long lru_idle,
-                       long long lru_clock, int lru_multiplier);
+                      long long lru_clock, int lru_multiplier);
+
 #define LOOKUP_NONE 0
 #define LOOKUP_NOTOUCH (1<<0)
 #define LOOKUP_NONOTIFY (1<<1)
+
 void dbAdd(redisDb *db, robj *key, robj *val);
+
+void dbAddWithHash(redisDb *db, robj *key, uint64_t hash, robj *val);
+
 int dbAddRDBLoad(redisDb *db, sds key, robj *val);
+
 void dbOverwrite(redisDb *db, robj *key, robj *val);
+
+void dbOverwriteWithHash(redisDb *db, robj *key, uint64_t hash, robj *val);
+
 void genericSetKey(client *c, redisDb *db, robj *key, robj *val, int keepttl, int signal);
+
+void genericSetKeyWithHash(client *c, redisDb *db, robj *key, uint64_t hash, robj *val, int keepttl, int signal);
+
 void setKey(client *c, redisDb *db, robj *key, robj *val);
+
 robj *dbRandomKey(redisDb *db);
+
 int dbSyncDelete(redisDb *db, robj *key);
+
+int dbSyncDeleteWithHash(redisDb *db, robj *key, uint64_t hash);
+
 int dbDelete(redisDb *db, robj *key);
+
 robj *dbUnshareStringValue(redisDb *db, robj *key, robj *o);
 
 #define EMPTYDB_NO_FLAGS 0      /* No flags. */
 #define EMPTYDB_ASYNC (1<<0)    /* Reclaim memory in another thread. */
-long long emptyDb(int dbnum, int flags, void(callback)(void*));
-long long emptyDbStructure(redisDb *dbarray, int dbnum, int async, void(callback)(void*));
+
+long long emptyDb(int dbnum, int flags, void(callback)(void *));
+
+long long emptyDbStructure(redisDb *dbarray, int dbnum, int async, void(callback)(void *));
+
 void flushAllDataAndResetRDB(int flags);
+
 long long dbTotalServerKeyCount();
+
 dbBackup *backupDb(void);
+
 void restoreDbBackup(dbBackup *buckup);
-void discardDbBackup(dbBackup *buckup, int flags, void(callback)(void*));
+
+void discardDbBackup(dbBackup *buckup, int flags, void(callback)(void *));
 
 
 int selectDb(client *c, int id);
+
 void signalModifiedKey(client *c, redisDb *db, robj *key);
+
+void signalModifiedKeyWithHash(client *c, redisDb *db, robj *key, uint64_t hash);
+
 void signalFlushedDb(int dbid, int async);
+
 unsigned int getKeysInSlot(unsigned int hashslot, robj **keys, unsigned int count);
+
 unsigned int countKeysInSlot(unsigned int hashslot);
+
 unsigned int delKeysInSlot(unsigned int hashslot);
+
 int verifyClusterConfigWithData(void);
+
 void scanGenericCommand(client *c, robj *o, unsigned long cursor);
+
 int parseScanCursorOrReply(client *c, robj *o, unsigned long *cursor);
+
 void slotToKeyAdd(sds key);
+
 void slotToKeyDel(sds key);
+
 int dbAsyncDelete(redisDb *db, robj *key);
+
+int dbAsyncDeleteWithHash(redisDb *db, robj *key, uint64_t hash);
+
 void emptyDbAsync(redisDb *db);
+
 void slotToKeyFlush(int async);
+
 size_t lazyfreeGetPendingObjectsCount(void);
+
 size_t lazyfreeGetFreedObjectsCount(void);
+
 void freeObjAsync(robj *key, robj *obj);
+
 void freeSlotsToKeysMapAsync(rax *rt);
+
 void freeSlotsToKeysMap(rax *rt, int async);
 
 
@@ -2484,21 +2583,38 @@ void freeLuaScriptsAsync(dict *lua_scripts);
 
 /* Blocked clients */
 void processUnblockedClients(void);
+
 void blockClient(client *c, int btype);
+
 void unblockClient(client *c);
+
 void queueClientForReprocessing(client *c);
+
 void replyToBlockedClientTimedOut(client *c);
+
 int getTimeoutFromObjectOrReply(client *c, robj *object, mstime_t *timeout, int unit);
+
 void disconnectAllBlockedClients(void);
+
 void handleClientsBlockedOnKeys(void);
+
 void signalKeyAsReady(redisDb *db, robj *key, int type);
-void blockForKeys(client *c, int btype, robj **keys, int numkeys, mstime_t timeout, robj *target, struct listPos *listpos, streamID *ids);
+
+void signalKeyAsReadyWithHash(redisDb *db, robj *key, uint64_t hash, int type);
+
+void
+blockForKeys(client *c, int btype, robj **keys, int numkeys, mstime_t timeout, robj *target, struct listPos *listpos,
+             streamID *ids);
+
 void updateStatsOnUnblock(client *c, long blocked_us, long reply_us);
 
 /* timeout.c -- Blocked clients timeout and connections timeout. */
 void addClientToTimeoutTable(client *c);
+
 void removeClientFromTimeoutTable(client *c);
+
 void handleBlockedClientsTimeout(void);
+
 int clientsCronHandleTimeout(client *c, mstime_t now_ms);
 
 /* expire.c -- Handling of expired keys */

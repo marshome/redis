@@ -380,8 +380,28 @@ void touchWatchedKey(redisDb *db, robj *key) {
 
     /* Mark all the clients watching this key as CLIENT_DIRTY_CAS */
     /* Check if we are already watching for this key */
-    listRewind(clients,&li);
-    while((ln = listNext(&li))) {
+    listRewind(clients, &li);
+    while ((ln = listNext(&li))) {
+        client *c = listNodeValue(ln);
+
+        c->flags |= CLIENT_DIRTY_CAS;
+    }
+}
+
+//ok
+void touchWatchedKeyWithHash(redisDb *db, robj *key, uint64_t hash) {
+    list *clients;
+    listIter li;
+    listNode *ln;
+
+    if (dictSize(db->watched_keys) == 0) return;
+    clients = dictFetchValueWithHash(db->watched_keys, key, hash);
+    if (!clients) return;
+
+    /* Mark all the clients watching this key as CLIENT_DIRTY_CAS */
+    /* Check if we are already watching for this key */
+    listRewind(clients, &li);
+    while ((ln = listNext(&li))) {
         client *c = listNodeValue(ln);
 
         c->flags |= CLIENT_DIRTY_CAS;

@@ -773,12 +773,51 @@ void signalKeyAsReady(redisDb *db, robj *key, int type) {
     rl->key = key;
     rl->db = db;
     incrRefCount(key);
-    listAddNodeTail(server.ready_keys,rl);
+    listAddNodeTail(server.ready_keys, rl);
 
     /* We also add the key in the db->ready_keys dictionary in order
      * to avoid adding it multiple times into a list with a simple O(1)
      * check. */
     incrRefCount(key);
-    serverAssert(dictAdd(db->ready_keys,key,NULL) == DICT_OK);
+    serverAssert(dictAdd(db->ready_keys, key, NULL) == DICT_OK);
+}
+
+//ok
+void signalKeyAsReadyWithHash(redisDb *db, robj *key, uint64_t hash, int type) {
+    readyList *rl;
+
+    /* Quick returns. */
+    int btype = getBlockedTypeByType(type);
+    if (btype == BLOCKED_NONE) {
+        /* The type can never block. */
+        return;
+    }
+    if (!server.blocked_clients_by_type[btype] &&
+        !server.blocked_clients_by_type[BLOCKED_MODULE]) {
+        /* No clients block on this type. Note: Blocked modules are represented
+         * by BLOCKED_MODULE, even if the intention is to wake up by normal
+         * types (list, zset, stream), so we need to check that there are no
+         * blocked modules before we do a quick return here. */
+        return;
+    }
+
+    /* No clients blocking for this key? No need to queue it. */
+    if (dictFindWithHash(db->blocking_keys, key, hash) == NULL) return;
+
+    /* Key was already signaled? No need to queue it again. */
+    if (dictFindWithHash(db->ready_keys, key, hash) != NULL) return;
+
+    /* Ok, we need to queue this key into server.ready_keys. */
+    rl = zmalloc(sizeof(*rl));
+    rl->key = key;
+    rl->db = db;
+    incrRefCount(key);
+    listAddNodeTail(server.ready_keys, rl);
+
+    /* We also add the key in the db->ready_keys dictionary in order
+     * to avoid adding it multiple times into a list with a simple O(1)
+     * check. */
+    incrRefCount(key);
+    serverAssert(dictAddWithHash(db->ready_keys, key, hash, NULL) == DICT_OK);
 }
 

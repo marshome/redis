@@ -81,6 +81,28 @@ robj *lookupKey(redisDb *db, robj *key, int flags) {
     }
 }
 
+//ok
+robj *lookupKeyWithHash(redisDb *db, robj *key, uint64_t hash, int flags) {
+    dictEntry *de = dictFindWithHash(db->dict, key->ptr, hash);
+    if (de) {
+        robj *val = dictGetVal(de);
+
+        /* Update the access time for the ageing algorithm.
+         * Don't do it if we have a saving child, as this will trigger
+         * a copy on write madness. */
+        if (!hasActiveChildProcess() && !(flags & LOOKUP_NOTOUCH)) {
+            if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
+                updateLFU(val);
+            } else {
+                val->lru = LRU_CLOCK();
+            }
+        }
+        return val;
+    } else {
+        return NULL;
+    }
+}
+
 /* Lookup a key for read operations, or return NULL if the key is not found
  * in the specified DB.
  *
@@ -158,22 +180,35 @@ robj *lookupKeyRead(redisDb *db, robj *key) {
  * Returns the linked value object if the key exists or NULL if the key
  * does not exist in the specified DB. */
 robj *lookupKeyWriteWithFlags(redisDb *db, robj *key, int flags) {
-    expireIfNeeded(db,key);
-    return lookupKey(db,key,flags);
+    expireIfNeeded(db, key);
+    return lookupKey(db, key, flags);
+}
+
+//ok
+robj *lookupKeyWriteWithFlagsWithHash(redisDb *db, robj *key, uint64_t hash, int flags) {
+    expireIfNeededWithHash(db, key, hash);
+    return lookupKeyWithHash(db, key, hash, flags);
 }
 
 robj *lookupKeyWrite(redisDb *db, robj *key) {
     return lookupKeyWriteWithFlags(db, key, LOOKUP_NONE);
 }
-void SentReplyOnKeyMiss(client *c, robj *reply){
+
+//ok
+robj *lookupKeyWriteWithHash(redisDb *db, robj *key, uint64_t hash) {
+    return lookupKeyWriteWithFlagsWithHash(db, key, hash, LOOKUP_NONE);
+}
+
+void SentReplyOnKeyMiss(client *c, robj *reply) {
     serverAssert(sdsEncodedObject(reply));
     sds rep = reply->ptr;
-    if (sdslen(rep) > 1 && rep[0] == '-'){
+    if (sdslen(rep) > 1 && rep[0] == '-') {
         addReplyErrorObject(c, reply);
     } else {
-        addReply(c,reply);
+        addReply(c, reply);
     }
 }
+
 robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply) {
     robj *o = lookupKeyRead(c->db, key);
     if (!o) SentReplyOnKeyMiss(c, reply);
@@ -194,8 +229,18 @@ void dbAdd(redisDb *db, robj *key, robj *val) {
     sds copy = sdsdup(key->ptr);
     int retval = dictAdd(db->dict, copy, val);
 
-    serverAssertWithInfo(NULL,key,retval == DICT_OK);
+    serverAssertWithInfo(NULL, key, retval == DICT_OK);
     signalKeyAsReady(db, key, val->type);
+    if (server.cluster_enabled) slotToKeyAdd(key->ptr);
+}
+
+//ok
+void dbAddWithHash(redisDb *db, robj *key, uint64_t hash, robj *val) {
+    sds copy = sdsdup(key->ptr);
+    int retval = dictAddWithHash(db->dict, copy, hash, val);
+
+    serverAssertWithInfo(NULL, key, retval == DICT_OK);
+    signalKeyAsReadyWithHash(db, key, hash, val->type);
     if (server.cluster_enabled) slotToKeyAdd(key->ptr);
 }
 
@@ -234,11 +279,35 @@ void dbOverwrite(redisDb *db, robj *key, robj *val) {
     /* Although the key is not really deleted from the database, we regard 
     overwrite as two steps of unlink+add, so we still need to call the unlink 
     callback of the module. */
-    moduleNotifyKeyUnlink(key,old);
+    moduleNotifyKeyUnlink(key, old);
     dictSetVal(db->dict, de, val);
 
     if (server.lazyfree_lazy_server_del) {
-        freeObjAsync(key,old);
+        freeObjAsync(key, old);
+        dictSetVal(db->dict, &auxentry, NULL);
+    }
+
+    dictFreeVal(db->dict, &auxentry);
+}
+
+//ok
+void dbOverwriteWithHash(redisDb *db, robj *key, uint64_t hash, robj *val) {
+    dictEntry *de = dictFindWithHash(db->dict, key->ptr, hash);
+
+    serverAssertWithInfo(NULL, key, de != NULL);
+    dictEntry auxentry = *de;
+    robj *old = dictGetVal(de);
+    if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
+        val->lru = old->lru;
+    }
+    /* Although the key is not really deleted from the database, we regard
+    overwrite as two steps of unlink+add, so we still need to call the unlink
+    callback of the module. */
+    moduleNotifyKeyUnlink(key, old);
+    dictSetVal(db->dict, de, val);
+
+    if (server.lazyfree_lazy_server_del) {
+        freeObjAsync(key, old);
         dictSetVal(db->dict, &auxentry, NULL);
     }
 
@@ -257,19 +326,31 @@ void dbOverwrite(redisDb *db, robj *key, robj *val) {
  * The client 'c' argument may be set to NULL if the operation is performed
  * in a context where there is no clear client performing the operation. */
 void genericSetKey(client *c, redisDb *db, robj *key, robj *val, int keepttl, int signal) {
-    if (lookupKeyWrite(db,key) == NULL) {
-        dbAdd(db,key,val);
+    if (lookupKeyWrite(db, key) == NULL) {
+        dbAdd(db, key, val);
     } else {
-        dbOverwrite(db,key,val);
+        dbOverwrite(db, key, val);
     }
     incrRefCount(val);
-    if (!keepttl) removeExpire(db,key);
-    if (signal) signalModifiedKey(c,db,key);
+    if (!keepttl) removeExpire(db, key);
+    if (signal) signalModifiedKey(c, db, key);
+}
+
+//ok
+void genericSetKeyWithHash(client *c, redisDb *db, robj *key, uint64_t hash, robj *val, int keepttl, int signal) {
+    if (lookupKeyWriteWithHash(db, key, hash) == NULL) {
+        dbAddWithHash(db, key, hash, val);
+    } else {
+        dbOverwriteWithHash(db, key, hash, val);
+    }
+    incrRefCount(val);
+    if (!keepttl) removeExpireWithHash(db, key, hash);
+    if (signal) signalModifiedKeyWithHash(c, db, key, hash);
 }
 
 /* Common case for genericSetKey() where the TTL is not retained. */
 void setKey(client *c, redisDb *db, robj *key, robj *val) {
-    genericSetKey(c,db,key,val,0,1);
+    genericSetKey(c, db, key, val, 0, 1);
 }
 
 /* Return a random key, in form of a Redis object.
@@ -320,8 +401,26 @@ int dbSyncDelete(redisDb *db, robj *key) {
     if (de) {
         robj *val = dictGetVal(de);
         /* Tells the module that the key has been unlinked from the database. */
-        moduleNotifyKeyUnlink(key,val);
-        dictFreeUnlinkedEntry(db->dict,de);
+        moduleNotifyKeyUnlink(key, val);
+        dictFreeUnlinkedEntry(db->dict, de);
+        if (server.cluster_enabled) slotToKeyDel(key->ptr);
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+//ok
+int dbSyncDeleteWithHash(redisDb *db, robj *key, uint64_t hash) {
+    /* Deleting an entry from the expires dict will not free the sds of
+     * the key, because it is shared with the main dictionary. */
+    if (dictSize(db->expires) > 0) dictDeleteWithHash(db->expires, key->ptr, hash);
+    dictEntry *de = dictUnlinkWithHash(db->dict, key->ptr, hash);
+    if (de) {
+        robj *val = dictGetVal(de);
+        /* Tells the module that the key has been unlinked from the database. */
+        moduleNotifyKeyUnlink(key, val);
+        dictFreeUnlinkedEntry(db->dict, de);
         if (server.cluster_enabled) slotToKeyDel(key->ptr);
         return 1;
     } else {
@@ -332,8 +431,8 @@ int dbSyncDelete(redisDb *db, robj *key) {
 /* This is a wrapper whose behavior depends on the Redis lazy free
  * configuration. Deletes the key synchronously or asynchronously. */
 int dbDelete(redisDb *db, robj *key) {
-    return server.lazyfree_lazy_server_del ? dbAsyncDelete(db,key) :
-                                             dbSyncDelete(db,key);
+    return server.lazyfree_lazy_server_del ? dbAsyncDelete(db, key) :
+           dbSyncDelete(db, key);
 }
 
 /* Prepare the string object stored at 'key' to be modified destructively
@@ -576,15 +675,21 @@ long long dbTotalServerKeyCount() {
 /* Note that the 'c' argument may be NULL if the key was modified out of
  * a context of a client. */
 void signalModifiedKey(client *c, redisDb *db, robj *key) {
-    touchWatchedKey(db,key);
-    trackingInvalidateKey(c,key,1);
+    touchWatchedKey(db, key);
+    trackingInvalidateKey(c, key, 1);
+}
+
+//ok
+void signalModifiedKeyWithHash(client *c, redisDb *db, robj *key, uint64_t hash) {
+    touchWatchedKeyWithHash(db, key, hash);
+    trackingInvalidateKey(c, key, 1);
 }
 
 void signalFlushedDb(int dbid, int async) {
     int startdb, enddb;
     if (dbid == -1) {
         startdb = 0;
-        enddb = server.dbnum-1;
+        enddb = server.dbnum - 1;
     } else {
         startdb = enddb = dbid;
     }
@@ -1401,8 +1506,16 @@ void swapdbCommand(client *c) {
 int removeExpire(redisDb *db, robj *key) {
     /* An expire may only be removed if there is a corresponding entry in the
      * main dict. Otherwise, the key will never be freed. */
-    serverAssertWithInfo(NULL,key,dictFind(db->dict,key->ptr) != NULL);
-    return dictDelete(db->expires,key->ptr) == DICT_OK;
+    serverAssertWithInfo(NULL, key, dictFind(db->dict, key->ptr) != NULL);
+    return dictDelete(db->expires, key->ptr) == DICT_OK;
+}
+
+//ok
+int removeExpireWithHash(redisDb *db, robj *key, uint64_t hash) {
+    /* An expire may only be removed if there is a corresponding entry in the
+     * main dict. Otherwise, the key will never be freed. */
+    serverAssertWithInfo(NULL, key, dictFindWithHash(db->dict, key->ptr, hash) != NULL);
+    return dictDeleteWithHash(db->expires, key->ptr, hash) == DICT_OK;
 }
 
 /* Set an expire to the specified key. If the expire is set in the context
@@ -1413,7 +1526,7 @@ void setExpire(client *c, redisDb *db, robj *key, long long when) {
     dictEntry *kde, *de;
 
     /* Reuse the sds from the main dict in the expire dict */
-    kde = dictFind(db->dict,key->ptr);
+    kde = dictFind(db->dict, key->ptr);
     serverAssertWithInfo(NULL,key,kde != NULL);
     de = dictAddOrFind(db->expires,dictGetKey(kde));
     dictSetSignedIntegerVal(de,when);
@@ -1430,11 +1543,27 @@ long long getExpire(redisDb *db, robj *key) {
 
     /* No expire? return ASAP */
     if (dictSize(db->expires) == 0 ||
-       (de = dictFind(db->expires,key->ptr)) == NULL) return -1;
+        (de = dictFind(db->expires, key->ptr)) == NULL)
+        return -1;
 
     /* The entry was found in the expire dict, this means it should also
      * be present in the main dict (safety check). */
-    serverAssertWithInfo(NULL,key,dictFind(db->dict,key->ptr) != NULL);
+    serverAssertWithInfo(NULL, key, dictFind(db->dict, key->ptr) != NULL);
+    return dictGetSignedIntegerVal(de);
+}
+
+//ok
+long long getExpireWithHash(redisDb *db, robj *key, uint64_t hash) {
+    dictEntry *de;
+
+    /* No expire? return ASAP */
+    if (dictSize(db->expires) == 0 ||
+        (de = dictFindWithHash(db->expires, key->ptr, hash)) == NULL)
+        return -1;
+
+    /* The entry was found in the expire dict, this means it should also
+     * be present in the main dict (safety check). */
+    serverAssertWithInfo(NULL, key, dictFindWithHash(db->dict, key->ptr, hash) != NULL);
     return dictGetSignedIntegerVal(de);
 }
 
@@ -1443,14 +1572,30 @@ void deleteExpiredKeyAndPropagate(redisDb *db, robj *keyobj) {
     mstime_t expire_latency;
     latencyStartMonitor(expire_latency);
     if (server.lazyfree_lazy_expire)
-        dbAsyncDelete(db,keyobj);
+        dbAsyncDelete(db, keyobj);
     else
-        dbSyncDelete(db,keyobj);
+        dbSyncDelete(db, keyobj);
     latencyEndMonitor(expire_latency);
-    latencyAddSampleIfNeeded("expire-del",expire_latency);
-    notifyKeyspaceEvent(NOTIFY_EXPIRED,"expired",keyobj,db->id);
+    latencyAddSampleIfNeeded("expire-del", expire_latency);
+    notifyKeyspaceEvent(NOTIFY_EXPIRED, "expired", keyobj, db->id);
     signalModifiedKey(NULL, db, keyobj);
-    propagateExpire(db,keyobj,server.lazyfree_lazy_expire);
+    propagateExpire(db, keyobj, server.lazyfree_lazy_expire);
+    server.stat_expiredkeys++;
+}
+
+//ok
+void deleteExpiredKeyAndPropagateWithHash(redisDb *db, robj *keyobj, uint64_t hash) {
+    mstime_t expire_latency;
+    latencyStartMonitor(expire_latency);
+    if (server.lazyfree_lazy_expire)
+        dbAsyncDeleteWithHash(db, keyobj, hash);
+    else
+        dbSyncDeleteWithHash(db, keyobj, hash);
+    latencyEndMonitor(expire_latency);
+    latencyAddSampleIfNeeded("expire-del", expire_latency);
+    notifyKeyspaceEvent(NOTIFY_EXPIRED, "expired", keyobj, db->id);
+    signalModifiedKeyWithHash(NULL, db, keyobj, hash);
+    propagateExpire(db, keyobj, server.lazyfree_lazy_expire);
     server.stat_expiredkeys++;
 }
 
@@ -1509,7 +1654,45 @@ int keyIsExpired(redisDb *db, robj *key) {
     else if (server.fixed_time_expire > 0) {
         now = server.mstime;
     }
-    /* For the other cases, we want to use the most fresh time we have. */
+        /* For the other cases, we want to use the most fresh time we have. */
+    else {
+        now = mstime();
+    }
+
+    /* The key expired if the current (virtual or real) time is greater
+     * than the expire time of the key. */
+    return now > when;
+}
+
+//ok
+int keyIsExpiredWithHash(redisDb *db, robj *key, uint64_t hash) {
+    mstime_t when = getExpireWithHash(db, key, hash);
+    mstime_t now;
+
+    if (when < 0) return 0; /* No expire for this key */
+
+    /* Don't expire anything while loading. It will be done later. */
+    if (server.loading) return 0;
+
+    /* If we are in the context of a Lua script, we pretend that time is
+     * blocked to when the Lua script started. This way a key can expire
+     * only the first time it is accessed and not in the middle of the
+     * script execution, making propagation to slaves / AOF consistent.
+     * See issue #1525 on Github for more information. */
+    if (server.lua_caller) {
+        now = server.lua_time_snapshot;
+    }
+        /* If we are in the middle of a command execution, we still want to use
+         * a reference time that does not change: in that case we just use the
+         * cached time, that we update before each call in the call() function.
+         * This way we avoid that commands such as RPOPLPUSH or similar, that
+         * may re-open the same key multiple times, can invalidate an already
+         * open object in a next call, if the next call will see the key expired,
+         * while the first did not. */
+    else if (server.fixed_time_expire > 0) {
+        now = server.mstime;
+    }
+        /* For the other cases, we want to use the most fresh time we have. */
     else {
         now = mstime();
     }
@@ -1558,7 +1741,32 @@ int expireIfNeeded(redisDb *db, robj *key) {
     if (checkClientPauseTimeoutAndReturnIfPaused()) return 1;
 
     /* Delete the key */
-    deleteExpiredKeyAndPropagate(db,key);
+    deleteExpiredKeyAndPropagate(db, key);
+    return 1;
+}
+
+//ok
+int expireIfNeededWithHash(redisDb *db, robj *key, uint64_t hash) {
+    if (!keyIsExpiredWithHash(db, key, hash)) return 0;
+
+    /* If we are running in the context of a slave, instead of
+     * evicting the expired key from the database, we return ASAP:
+     * the slave key expiration is controlled by the master that will
+     * send us synthesized DEL operations for expired keys.
+     *
+     * Still we try to return the right information to the caller,
+     * that is, 0 if we think the key should be still valid, 1 if
+     * we think the key is expired at this time. */
+    if (server.masterhost != NULL) return 1;
+
+    /* If clients are paused, we keep the current dataset constant,
+     * but return to the client what we believe is the right state. Typically,
+     * at the end of the pause we will properly expire the key OR we will
+     * have failed over and the new primary will send us the expire. */
+    if (checkClientPauseTimeoutAndReturnIfPaused()) return 1;
+
+    /* Delete the key */
+    deleteExpiredKeyAndPropagateWithHash(db, key, hash);
     return 1;
 }
 
@@ -1913,29 +2121,32 @@ int xreadGetKeys(struct redisCommand *cmd, robj **argv, int argc, getKeysResult 
  * a fast way a key that belongs to a specified hash slot. This is useful
  * while rehashing the cluster and in other conditions when we need to
  * understand if we have keys for a given hash slot. */
+//ok
 void slotToKeyUpdateKey(sds key, int add) {
     size_t keylen = sdslen(key);
-    unsigned int hashslot = keyHashSlot(key,keylen);
+    unsigned int hashslot = keyHashSlot(key, keylen);
     unsigned char buf[64];
     unsigned char *indexed = buf;
 
     server.cluster->slots_keys_count[hashslot] += add ? 1 : -1;
-    if (keylen+2 > 64) indexed = zmalloc(keylen+2);
+    if (keylen + 2 > 64) indexed = zmalloc(keylen + 2);
     indexed[0] = (hashslot >> 8) & 0xff;
     indexed[1] = hashslot & 0xff;
-    memcpy(indexed+2,key,keylen);
+    memcpy(indexed + 2, key, keylen);
     if (add) {
-        raxInsert(server.cluster->slots_to_keys,indexed,keylen+2,NULL,NULL);
+        raxInsert(server.cluster->slots_to_keys, indexed, keylen + 2, NULL, NULL);
     } else {
-        raxRemove(server.cluster->slots_to_keys,indexed,keylen+2,NULL);
+        raxRemove(server.cluster->slots_to_keys, indexed, keylen + 2, NULL);
     }
     if (indexed != buf) zfree(indexed);
 }
 
+//ok
 void slotToKeyAdd(sds key) {
     slotToKeyUpdateKey(key,1);
 }
 
+//ok
 void slotToKeyDel(sds key) {
     slotToKeyUpdateKey(key,0);
 }
