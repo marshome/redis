@@ -4296,6 +4296,17 @@ void preprocessCommand(client *c) {
         return;
     }
 
+    if (c->flags & CLIENT_MULTI &&
+        c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&
+        c->cmd->proc != multiCommand && c->cmd->proc != watchCommand &&
+        c->cmd->proc != resetCommand) {
+        queueMultiCommand(c);
+        addReply(c, shared.queued);
+        c->preprocess.stopped = 1;
+        c->preprocess.err = C_OK;
+        return;
+    }
+
     if (c->cmd->preprocess_proc != NULL) {
         c->cmd->preprocess_proc(c);
         c->preprocess.cmd_preprocessed = 1;
@@ -4327,18 +4338,10 @@ int processCommand(client *c) {
     }
 
     /* Exec the command */
-    if (c->flags & CLIENT_MULTI &&
-        c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&
-        c->cmd->proc != multiCommand && c->cmd->proc != watchCommand &&
-        c->cmd->proc != resetCommand)
-    {
-        queueMultiCommand(c);
-        addReply(c,shared.queued);
-    } else {
-        call(c,CMD_CALL_FULL);
-        c->woff = server.master_repl_offset;
-        if (listLength(server.ready_keys))
-            handleClientsBlockedOnKeys();
+    call(c, CMD_CALL_FULL);
+    c->woff = server.master_repl_offset;
+    if (listLength(server.ready_keys)) {
+        handleClientsBlockedOnKeys();
     }
 
     return C_OK;
