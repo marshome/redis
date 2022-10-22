@@ -28,5 +28,5 @@
 
 # 压测示例：
 
-- ./src/redis-benchmark -t set -c 100 --threads 2 -r 100000000 -n 1000000
-- ./src/redis-benchmark -c 100 --threads 2 -n 1000000 incr foo
+- ./src/redis-benchmark -t set -c 4 --threads 4 -r 100000000 -n 10000
+- ./src/redis-benchmark -c 4 --threads 2 -n 1000000 incr foo
