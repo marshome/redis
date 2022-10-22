@@ -2820,6 +2820,9 @@ void blmoveCommand(client *c);
 void appendCommandPreprocess(client *c);
 
 void appendCommand(client *c);
+
+void strlenCommandPreprocess(client *c);
+
 void strlenCommand(client *c);
 void zrankCommand(client *c);
 void zrevrankCommand(client *c);

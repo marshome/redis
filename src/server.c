@@ -242,7 +242,7 @@ struct redisCommand redisCommandTable[] = {
 
         {"strlen", strlenCommand, 2,
                 "read-only fast @string",
-                0, NULL, 1, 1, 1, 0, 0, 0,                         NULL},
+                0, NULL, 1, 1, 1, 0, 0, 0, strlenCommandPreprocess},
 
         {"del",    delCommand,    -2,
                 "write @keyspace",
@@ -250,7 +250,7 @@ struct redisCommand redisCommandTable[] = {
 
         {"unlink", unlinkCommand, -2,
                 "write fast @keyspace",
-                0, NULL,                        1, -1, 1, 0, 0, 0, NULL},
+                0, NULL, 1, -1, 1, 0, 0, 0,                        NULL},
 
         {"exists", existsCommand, -2,
                 "read-only fast @keyspace",
@@ -260,7 +260,7 @@ struct redisCommand redisCommandTable[] = {
                 "write use-memory @bitmap",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"getbit",               getbitCommand,              3,
+        {"getbit", getbitCommand, 3,
                 "read-only fast @bitmap",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 

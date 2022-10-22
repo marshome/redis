@@ -1048,11 +1048,22 @@ void appendCommand(client *c) {
     }
 }
 
+void strlenCommandPreprocess(client *c) {
+    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
+}
+
 void strlenCommand(client *c) {
     robj *o;
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
-        checkType(c,o,OBJ_STRING)) return;
-    addReplyLongLong(c,stringObjectLen(o));
+    if (c->preprocess.cmd_preprocessed) {
+        if ((o = lookupKeyReadOrReplyWithHash(c, c->argv[1], c->preprocess.key_hash, shared.czero)) == NULL ||
+            checkType(c, o, OBJ_STRING))
+            return;
+    } else {
+        if ((o = lookupKeyReadOrReply(c, c->argv[1], shared.czero)) == NULL ||
+            checkType(c, o, OBJ_STRING))
+            return;
+    }
+    addReplyLongLong(c, stringObjectLen(o));
 }
 
 
