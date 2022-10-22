@@ -1,0 +1,1 @@
+./src/redis-benchmark -t set -c 4 --threads 4 -r 100000000 -n 1000000

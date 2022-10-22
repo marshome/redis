@@ -353,7 +353,7 @@ void setCommandPreprocess(client *c) {
         c->preprocess.cmd_stopped = 1;
         return;
     }
-    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
+    c->preprocess.key_hash = dictSdsHash(c->argv[1]->ptr);
     c->argv[2] = tryObjectEncoding(c->argv[2]);
 }
 
