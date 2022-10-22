@@ -482,8 +482,16 @@ int getGenericCommandWithHash(client *c, uint64_t hash) {
     return C_OK;
 }
 
+void getCommandPreprocess(client *c) {
+    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
+}
+
 void getCommand(client *c) {
-    getGenericCommand(c);
+    if (c->preprocess.cmd_preprocessed) {
+        getGenericCommandWithHash(c, c->preprocess.key_hash);
+    } else {
+        getGenericCommand(c);
+    }
 }
 
 /*

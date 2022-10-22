@@ -193,13 +193,13 @@ struct redisServer server; /* Server global state */
  */
 
 struct redisCommand redisCommandTable[] = {
-        {"module",               moduleCommand,              -2,
+        {"module", moduleCommand, -2,
                 "admin no-script",
                 0, NULL, 0, 0, 0, 0, 0, 0, NULL},
 
-        {"get",                  getCommand,                 2,
+        {"get",    getCommand,    2,
                 "read-only fast @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, NULL},
+                0, NULL, 1, 1, 1, 0, 0, 0, getCommandPreprocess},
 
         {"getex",  getexCommand,  -2,
                 "write fast @string",

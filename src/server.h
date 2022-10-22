@@ -2688,7 +2688,9 @@ void psetexCommandPreprocess(client *c);
 
 void psetexCommand(client *c);//ok
 
-void getCommand(client *c);
+void getCommandPreprocess(client *c);
+
+void getCommand(client *c);//ok
 
 void getexCommand(client *c);
 
