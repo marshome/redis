@@ -2473,6 +2473,8 @@ void genericSetKeyWithHash(client *c, redisDb *db, robj *key, uint64_t hash, rob
 
 void setKey(client *c, redisDb *db, robj *key, robj *val);
 
+void setKeyWithHash(client *c, redisDb *db, robj *key, uint64_t hash, robj *val);
+
 robj *dbRandomKey(redisDb *db);
 
 int dbSyncDelete(redisDb *db, robj *key);
@@ -2779,7 +2781,11 @@ void monitorCommand(client *c);
 void expireCommand(client *c);
 void expireatCommand(client *c);
 void pexpireCommand(client *c);
+
 void pexpireatCommand(client *c);
+
+void getsetCommandPreprocess(client *c);
+
 void getsetCommand(client *c);
 void ttlCommand(client *c);
 void touchCommand(client *c);

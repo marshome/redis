@@ -3205,6 +3205,7 @@ void replaceClientCommandVector(client *c, int argc, robj **argv) {
  * 2. If the original argument vector was longer than the one we
  *    want to end with, it's up to the caller to set c->argc and
  *    free the no longer used objects on c->argv. */
+//ok
 void rewriteClientCommandArgument(client *c, int i, robj *newval) {
     robj *oldval;
     retainOriginalCommandVector(c);
@@ -3223,7 +3224,7 @@ void rewriteClientCommandArgument(client *c, int i, robj *newval) {
     /* If this is the command name make sure to fix c->cmd. */
     if (i == 0) {
         c->cmd = lookupCommandOrOriginal(c->argv[0]->ptr);
-        serverAssertWithInfo(c,NULL,c->cmd != NULL);
+        serverAssertWithInfo(c, NULL, c->cmd != NULL);
     }
 }
 

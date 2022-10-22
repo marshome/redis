@@ -3,7 +3,6 @@
 - decr
 - decrby
 - getrange
-- getset
 - incr
 - incby
 - incbyfloat
@@ -20,16 +19,12 @@
 - strlen
 - psetex
 - set
-  - ./src/redis-benchmark -t set -c 4 --threads 4 -r 100000000 -n 50000
-  - 官方
-    - 
-  - contest
-    - 57240.99
 - setex
 - setnx
 - get
 - getdel
 - getex
+- getset
 
 # 压测示例：
 

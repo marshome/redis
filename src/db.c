@@ -408,6 +408,10 @@ void setKey(client *c, redisDb *db, robj *key, robj *val) {
     genericSetKey(c, db, key, val, 0, 1);
 }
 
+void setKeyWithHash(client *c, redisDb *db, robj *key, uint64_t hash, robj *val) {
+    genericSetKeyWithHash(c, db, key, hash, val, 0, 1);
+}
+
 /* Return a random key, in form of a Redis object.
  * If there are no keys, NULL is returned.
  *

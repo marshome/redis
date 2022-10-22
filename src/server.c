@@ -628,47 +628,47 @@ struct redisCommand redisCommandTable[] = {
                 "read-only fast @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"hrandfield",           hrandfieldCommand,          -2,
+        {"hrandfield",  hrandfieldCommand,  -2,
                 "read-only random @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"hscan",                hscanCommand,               -3,
+        {"hscan",       hscanCommand,       -3,
                 "read-only random @hash",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"incrby",               incrbyCommand,              3,
+        {"incrby",      incrbyCommand,      3,
                 "write use-memory fast @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"decrby",               decrbyCommand,              3,
+        {"decrby",      decrbyCommand,      3,
                 "write use-memory fast @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"incrbyfloat",          incrbyfloatCommand,         3,
+        {"incrbyfloat", incrbyfloatCommand, 3,
                 "write use-memory fast @string",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 
-        {"getset",               getsetCommand,              3,
+        {"getset",      getsetCommand,      3,
                 "write use-memory fast @string",
-                0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
+                0, NULL,                        1, 1,  1, 0, 0, 0, getsetCommandPreprocess},
 
-        {"mset",                 msetCommand,                -3,
+        {"mset",        msetCommand,        -3,
                 "write use-memory @string",
                 0, NULL,                        1, -1, 2, 0, 0, 0, NULL},
 
-        {"msetnx",               msetnxCommand,              -3,
+        {"msetnx",      msetnxCommand,      -3,
                 "write use-memory @string",
                 0, NULL,                        1, -1, 2, 0, 0, 0, NULL},
 
-        {"randomkey",            randomkeyCommand,           1,
+        {"randomkey",   randomkeyCommand,   1,
                 "read-only random @keyspace",
                 0, NULL,                        0, 0,  0, 0, 0, 0, NULL},
 
-        {"select",               selectCommand,              2,
+        {"select",      selectCommand,      2,
                 "ok-loading fast ok-stale @keyspace",
                 0, NULL,                        0, 0,  0, 0, 0, 0, NULL},
 
-        {"swapdb",               swapdbCommand,              3,
+        {"swapdb",      swapdbCommand,      3,
                 "write fast @keyspace @dangerous",
                 0, NULL,                        0, 0,  0, 0, 0, 0, NULL},
 

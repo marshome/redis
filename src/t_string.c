@@ -586,15 +586,21 @@ void getdelCommand(client *c) {
     }
 }
 
-void getsetCommand(client *c) {
-    if (getGenericCommand(c) == C_ERR) return;
+void getsetCommandPreprocess(client *c) {
+    hashKeyPreprocess(c);
     c->argv[2] = tryObjectEncoding(c->argv[2]);
-    setKey(c,c->db,c->argv[1],c->argv[2]);
-    notifyKeyspaceEvent(NOTIFY_STRING,"set",c->argv[1],c->db->id);
+}
+
+//ok
+void getsetCommand(client *c) {
+    uint64_t hash = c->preprocess.key_hash;
+    if (getGenericCommandWithHash(c, hash) == C_ERR) return;
+    setKeyWithHash(c, c->db, c->argv[1], hash, c->argv[2]);
+    notifyKeyspaceEvent(NOTIFY_STRING, "set", c->argv[1], c->db->id);
     server.dirty++;
 
     /* Propagate as SET command */
-    rewriteClientCommandArgument(c,0,shared.set);
+    rewriteClientCommandArgument(c, 0, shared.set);
 }
 
 void setrangeCommand(client *c) {
