@@ -2816,6 +2816,9 @@ void blpopCommand(client *c);
 void brpopCommand(client *c);
 void brpoplpushCommand(client *c);
 void blmoveCommand(client *c);
+
+void appendCommandPreprocess(client *c);
+
 void appendCommand(client *c);
 void strlenCommand(client *c);
 void zrankCommand(client *c);
