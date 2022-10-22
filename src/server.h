@@ -2663,6 +2663,8 @@ uint64_t redisBuildId(void);
 
 char *redisBuildIdString(void);
 
+void defaultProc(client *c);
+
 /* Commands prototypes */
 void authCommand(client *c);//skip
 
@@ -2695,6 +2697,8 @@ void getCommand(client *c);//ok
 void getexCommandPreprocess(client *c);
 
 void getexCommand(client *c);//ok
+
+void getdelCommandPreprocess(client *c);
 
 void getdelCommand(client *c);
 

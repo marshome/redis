@@ -78,6 +78,15 @@ double R_Zero, R_PosInf, R_NegInf, R_Nan;
 /* Global vars */
 struct redisServer server; /* Server global state */
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
+
+void defaultProc(client *c) {
+    //nothing
+}
+
+#pragma clang diagnostic pop
+
 /* Our command table.
  *
  * Every entry is composed of the following fields:
@@ -195,7 +204,7 @@ struct redisServer server; /* Server global state */
 struct redisCommand redisCommandTable[] = {
         {"module", moduleCommand, -2,
                 "admin no-script",
-                0, NULL, 0, 0, 0, 0, 0, 0, NULL},
+                0, NULL, 0, 0, 0, 0, 0, 0, defaultProc},
 
         {"get",    getCommand,    2,
                 "read-only fast @string",
@@ -207,7 +216,7 @@ struct redisCommand redisCommandTable[] = {
 
         {"getdel", getdelCommand, 2,
                 "write fast @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, NULL},
+                0, NULL, 1, 1, 1, 0, 0, 0, getdelCommandPreprocess},
 
         /* Note that we can't flag set as fast, since it may perform an
          * implicit DEL of a large key. */
@@ -3561,6 +3570,7 @@ struct redisCommand *lookupCommandByCString(const char *s) {
  * This is used by functions rewriting the argument vector such as
  * rewriteClientCommandVector() in order to set client->cmd pointer
  * correctly even if the command was renamed. */
+//ok
 struct redisCommand *lookupCommandOrOriginal(sds name) {
     struct redisCommand *cmd = dictFetchValue(server.commands, name);
 

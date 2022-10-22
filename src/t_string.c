@@ -682,23 +682,43 @@ void getexCommand(client *c) {
         if (removeExpire(c->db, c->argv[1])) {
             signalModifiedKey(c, c->db, c->argv[1]);
             rewriteClientCommandVector(c, 2, shared.persist, c->argv[1]);
-            notifyKeyspaceEvent(NOTIFY_GENERIC,"persist",c->argv[1],c->db->id);
+            notifyKeyspaceEvent(NOTIFY_GENERIC, "persist", c->argv[1], c->db->id);
             server.dirty++;
         }
     }
 }
 
+void getdelCommandPreprocess(client *c) {
+    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
+}
+
+//ok
 void getdelCommand(client *c) {
-    if (getGenericCommand(c) == C_ERR) return;
-    int deleted = server.lazyfree_lazy_user_del ? dbAsyncDelete(c->db, c->argv[1]) :
-                  dbSyncDelete(c->db, c->argv[1]);
-    if (deleted) {
-        /* Propagate as DEL/UNLINK command */
-        robj *aux = server.lazyfree_lazy_user_del ? shared.unlink : shared.del;
-        rewriteClientCommandVector(c,2,aux,c->argv[1]);
-        signalModifiedKey(c, c->db, c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
-        server.dirty++;
+    if (c->preprocess.cmd_preprocessed) {
+        uint64_t hash = c->preprocess.key_hash;
+        if (getGenericCommandWithHash(c, hash) == C_ERR) return;
+        int deleted = server.lazyfree_lazy_user_del ? dbAsyncDeleteWithHash(c->db, c->argv[1], hash) :
+                      dbSyncDeleteWithHash(c->db, c->argv[1], hash);
+        if (deleted) {
+            /* Propagate as DEL/UNLINK command */
+            robj *aux = server.lazyfree_lazy_user_del ? shared.unlink : shared.del;
+            rewriteClientCommandVector(c, 2, aux, c->argv[1]);
+            signalModifiedKeyWithHash(c, c->db, c->argv[1], hash);
+            notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
+            server.dirty++;
+        }
+    } else {
+        if (getGenericCommand(c) == C_ERR) return;
+        int deleted = server.lazyfree_lazy_user_del ? dbAsyncDelete(c->db, c->argv[1]) :
+                      dbSyncDelete(c->db, c->argv[1]);
+        if (deleted) {
+            /* Propagate as DEL/UNLINK command */
+            robj *aux = server.lazyfree_lazy_user_del ? shared.unlink : shared.del;
+            rewriteClientCommandVector(c, 2, aux, c->argv[1]);
+            signalModifiedKey(c, c->db, c->argv[1]);
+            notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
+            server.dirty++;
+        }
     }
 }
 

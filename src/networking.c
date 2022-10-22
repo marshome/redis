@@ -3158,13 +3158,14 @@ void redactClientCommandArgument(client *c, int argc) {
 /* Rewrite the command vector of the client. All the new objects ref count
  * is incremented. The old command vector is freed, and the old objects
  * ref count is decremented. */
+//ok
 void rewriteClientCommandVector(client *c, int argc, ...) {
     va_list ap;
     int j;
     robj **argv; /* The new argument vector */
 
     argv = zmalloc(sizeof(robj*)*argc);
-    va_start(ap,argc);
+    va_start(ap, argc);
     for (j = 0; j < argc; j++) {
         robj *a;
 
@@ -3177,6 +3178,7 @@ void rewriteClientCommandVector(client *c, int argc, ...) {
 }
 
 /* Completely replace the client command vector with the provided one. */
+//ok
 void replaceClientCommandVector(client *c, int argc, robj **argv) {
     int j;
     retainOriginalCommandVector(c);
@@ -3189,7 +3191,7 @@ void replaceClientCommandVector(client *c, int argc, robj **argv) {
         if (c->argv[j])
             c->argv_len_sum += getStringObjectLen(c->argv[j]);
     c->cmd = lookupCommandOrOriginal(c->argv[0]->ptr);
-    serverAssertWithInfo(c,NULL,c->cmd != NULL);
+    serverAssertWithInfo(c, NULL, c->cmd != NULL);
 }
 
 /* Rewrite a single item in the command vector.
