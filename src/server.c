@@ -81,11 +81,15 @@ struct redisServer server; /* Server global state */
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
 
-void defaultProc(client *c) {
+void emptyProc(client *c) {
     //nothing
 }
 
 #pragma clang diagnostic pop
+
+void hashKeyPreprocess(client *c) {
+    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
+}
 
 /* Our command table.
  *
@@ -202,65 +206,65 @@ void defaultProc(client *c) {
  */
 
 struct redisCommand redisCommandTable[] = {
-        {"module", moduleCommand, -2,
+        {"module",               moduleCommand,              -2,
                 "admin no-script",
-                0, NULL, 0, 0, 0, 0, 0, 0, defaultProc},
+                0, NULL,                        0, 0,  0, 0, 0, 0, emptyProc},
 
-        {"get",    getCommand,    2,
+        {"get",                  getCommand,                 2,
                 "read-only fast @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, getCommandPreprocess},
+                0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
-        {"getex",  getexCommand,  -2,
+        {"getex",                getexCommand,               -2,
                 "write fast @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, getexCommandPreprocess},
+                0, NULL,                        1, 1,  1, 0, 0, 0, getexCommandPreprocess},
 
-        {"getdel", getdelCommand, 2,
+        {"getdel",               getdelCommand,              2,
                 "write fast @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, getdelCommandPreprocess},
+                0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
         /* Note that we can't flag set as fast, since it may perform an
          * implicit DEL of a large key. */
-        {"set",    setCommand,    -3,
+        {"set",                  setCommand,                 -3,
                 "write use-memory @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, setCommandPreprocess},
+                0, NULL,                        1, 1,  1, 0, 0, 0, setCommandPreprocess},
 
-        {"setnx",  setnxCommand,  3,
+        {"setnx",                setnxCommand,               3,
                 "write use-memory fast @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, setnxCommandPreprocess},
+                0, NULL,                        1, 1,  1, 0, 0, 0, setnxCommandPreprocess},
 
-        {"setex",  setexCommand,  4,
+        {"setex",                setexCommand,               4,
                 "write use-memory @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, setexCommandPreprocess},
+                0, NULL,                        1, 1,  1, 0, 0, 0, setexCommandPreprocess},
 
-        {"psetex", psetexCommand, 4,
+        {"psetex",               psetexCommand,              4,
                 "write use-memory @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, psetexCommandPreprocess},
+                0, NULL,                        1, 1,  1, 0, 0, 0, psetexCommandPreprocess},
 
-        {"append", appendCommand, 3,
+        {"append",               appendCommand,              3,
                 "write use-memory fast @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, appendCommandPreprocess},
+                0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
-        {"strlen", strlenCommand, 2,
+        {"strlen",               strlenCommand,              2,
                 "read-only fast @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, strlenCommandPreprocess},
+                0, NULL,                        1, 1,  1, 0, 0, 0, hashKeyPreprocess},
 
-        {"del",    delCommand,    -2,
+        {"del",                  delCommand,                 -2,
                 "write @keyspace",
-                0, NULL, 1, -1, 1, 0, 0, 0,                        NULL},
+                0, NULL,                        1, -1, 1, 0, 0, 0, emptyProc},//TODO
 
-        {"unlink", unlinkCommand, -2,
+        {"unlink",               unlinkCommand,              -2,
                 "write fast @keyspace",
-                0, NULL, 1, -1, 1, 0, 0, 0,                        NULL},
+                0, NULL,                        1, -1, 1, 0, 0, 0, emptyProc},//TODO
 
-        {"exists", existsCommand, -2,
+        {"exists",               existsCommand,              -2,
                 "read-only fast @keyspace",
-                0, NULL,                        1, -1, 1, 0, 0, 0, NULL},
+                0, NULL,                        1, -1, 1, 0, 0, 0, emptyProc},//TODO
 
-        {"setbit", setbitCommand, 4,
+        {"setbit",               setbitCommand,              4,
                 "write use-memory @bitmap",
-                0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
+                0, NULL,                        1, 1,  1, 0, 0, 0, setbitCommandPreprocess},
 
-        {"getbit", getbitCommand, 3,
+        {"getbit",               getbitCommand,              3,
                 "read-only fast @bitmap",
                 0, NULL,                        1, 1,  1, 0, 0, 0, NULL},
 

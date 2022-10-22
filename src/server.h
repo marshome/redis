@@ -865,6 +865,8 @@ typedef struct preprocessData {
     robj *set_cmd_expire;
     int set_cmd_unit;
     int set_cmd_flags;
+    uint64_t setbit_cmd_bitoffset;
+    long setbit_cmd_on;
 } preprocessData;
 
 
@@ -2663,7 +2665,9 @@ uint64_t redisBuildId(void);
 
 char *redisBuildIdString(void);
 
-void defaultProc(client *c);
+void emptyProc(client *c);
+
+void hashKeyPreprocess(client *c);
 
 /* Commands prototypes */
 void authCommand(client *c);//skip
@@ -2690,15 +2694,11 @@ void psetexCommandPreprocess(client *c);
 
 void psetexCommand(client *c);//ok
 
-void getCommandPreprocess(client *c);
-
 void getCommand(client *c);//ok
 
 void getexCommandPreprocess(client *c);
 
 void getexCommand(client *c);//ok
-
-void getdelCommandPreprocess(client *c);
 
 void getdelCommand(client *c);
 
@@ -2707,6 +2707,8 @@ void delCommand(client *c);
 void unlinkCommand(client *c);
 
 void existsCommand(client *c);
+
+void setbitCommandPreprocess(client *c);
 
 void setbitCommand(client *c);
 
@@ -2816,13 +2818,7 @@ void blpopCommand(client *c);
 void brpopCommand(client *c);
 void brpoplpushCommand(client *c);
 void blmoveCommand(client *c);
-
-void appendCommandPreprocess(client *c);
-
 void appendCommand(client *c);
-
-void strlenCommandPreprocess(client *c);
-
 void strlenCommand(client *c);
 void zrankCommand(client *c);
 void zrevrankCommand(client *c);

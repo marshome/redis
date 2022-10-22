@@ -483,11 +483,27 @@ robj *lookupStringForBitCommand(client *c, uint64_t maxbit) {
     if (checkType(c,o,OBJ_STRING)) return NULL;
 
     if (o == NULL) {
-        o = createObject(OBJ_STRING,sdsnewlen(NULL, byte+1));
-        dbAdd(c->db,c->argv[1],o);
+        o = createObject(OBJ_STRING, sdsnewlen(NULL, byte + 1));
+        dbAdd(c->db, c->argv[1], o);
     } else {
-        o = dbUnshareStringValue(c->db,c->argv[1],o);
-        o->ptr = sdsgrowzero(o->ptr,byte+1);
+        o = dbUnshareStringValue(c->db, c->argv[1], o);
+        o->ptr = sdsgrowzero(o->ptr, byte + 1);
+    }
+    return o;
+}
+
+//ok
+robj *lookupStringForBitCommandWithHash(client *c, uint64_t hash, uint64_t maxbit) {
+    size_t byte = maxbit >> 3;
+    robj *o = lookupKeyWriteWithHash(c->db, c->argv[1], hash);
+    if (checkType(c, o, OBJ_STRING)) return NULL;
+
+    if (o == NULL) {
+        o = createObject(OBJ_STRING, sdsnewlen(NULL, byte + 1));
+        dbAddWithHash(c->db, c->argv[1], hash, o);
+    } else {
+        o = dbUnshareStringValue(c->db, c->argv[1], o);
+        o->ptr = sdsgrowzero(o->ptr, byte + 1);
     }
     return o;
 }
@@ -512,10 +528,10 @@ unsigned char *getObjectReadOnlyString(robj *o, long *len, char *llbuf) {
     /* Set the 'p' pointer to the string, that can be just a stack allocated
      * array if our string was integer encoded. */
     if (o && o->encoding == OBJ_ENCODING_INT) {
-        p = (unsigned char*) llbuf;
-        if (len) *len = ll2string(llbuf,LONG_STR_SIZE,(long)o->ptr);
+        p = (unsigned char *) llbuf;
+        if (len) *len = ll2string(llbuf, LONG_STR_SIZE, (long) o->ptr);
     } else if (o) {
-        p = (unsigned char*) o->ptr;
+        p = (unsigned char *) o->ptr;
         if (len) *len = sdslen(o->ptr);
     } else {
         if (len) *len = 0;
@@ -523,43 +539,93 @@ unsigned char *getObjectReadOnlyString(robj *o, long *len, char *llbuf) {
     return p;
 }
 
-/* SETBIT key offset bitvalue */
-void setbitCommand(client *c) {
-    robj *o;
+void setbitCommandPreprocess(client *c) {
     char *err = "bit is not an integer or out of range";
     uint64_t bitoffset;
-    ssize_t byte, bit;
-    int byteval, bitval;
     long on;
-
-    if (getBitOffsetFromArgument(c,c->argv[2],&bitoffset,0,0) != C_OK)
-        return;
-
-    if (getLongFromObjectOrReply(c,c->argv[3],&on,err) != C_OK)
-        return;
-
-    /* Bits can only be set or cleared... */
-    if (on & ~1) {
-        addReplyError(c,err);
+    if (getBitOffsetFromArgument(c, c->argv[2], &bitoffset, 0, 0) != C_OK) {
+        c->preprocess.cmd_stopped = 1;
         return;
     }
+    if (getLongFromObjectOrReply(c, c->argv[3], &on, err) != C_OK) {
+        c->preprocess.cmd_stopped = 1;
+        return;
+    }
+    /* Bits can only be set or cleared... */
+    if (on & ~1) {
+        addReplyError(c, err);
+        c->preprocess.cmd_stopped = 1;
+        return;
+    }
+    hashKeyPreprocess(c);
+}
 
-    if ((o = lookupStringForBitCommand(c,bitoffset)) == NULL) return;
+/* SETBIT key offset bitvalue */
+void setbitCommand(client *c) {
+    if (c->preprocess.cmd_preprocessed) {
+        if (c->preprocess.cmd_stopped) {
+            return;
+        }
+        uint64_t hash = c->preprocess.key_hash;
+        robj *o;
+        uint64_t bitoffset = c->preprocess.setbit_cmd_bitoffset;
+        long on = c->preprocess.setbit_cmd_on;
+        ssize_t byte, bit;
+        int byteval, bitval;
 
-    /* Get current values */
-    byte = bitoffset >> 3;
-    byteval = ((uint8_t*)o->ptr)[byte];
-    bit = 7 - (bitoffset & 0x7);
-    bitval = byteval & (1 << bit);
+        if ((o = lookupStringForBitCommandWithHash(c, hash, bitoffset)) == NULL) return;
 
-    /* Update byte with new bit value and return original value */
-    byteval &= ~(1 << bit);
-    byteval |= ((on & 0x1) << bit);
-    ((uint8_t*)o->ptr)[byte] = byteval;
-    signalModifiedKey(c,c->db,c->argv[1]);
-    notifyKeyspaceEvent(NOTIFY_STRING,"setbit",c->argv[1],c->db->id);
-    server.dirty++;
-    addReply(c, bitval ? shared.cone : shared.czero);
+        /* Get current values */
+        byte = bitoffset >> 3;
+        byteval = ((uint8_t *) o->ptr)[byte];
+        bit = 7 - (bitoffset & 0x7);
+        bitval = byteval & (1 << bit);
+
+        /* Update byte with new bit value and return original value */
+        byteval &= ~(1 << bit);
+        byteval |= ((on & 0x1) << bit);
+        ((uint8_t *) o->ptr)[byte] = byteval;
+        signalModifiedKeyWithHash(c, c->db, c->argv[1], hash);
+        notifyKeyspaceEvent(NOTIFY_STRING, "setbit", c->argv[1], c->db->id);
+        server.dirty++;
+        addReply(c, bitval ? shared.cone : shared.czero);
+    } else {
+        robj *o;
+        char *err = "bit is not an integer or out of range";
+        uint64_t bitoffset;
+        ssize_t byte, bit;
+        int byteval, bitval;
+        long on;
+
+        if (getBitOffsetFromArgument(c, c->argv[2], &bitoffset, 0, 0) != C_OK)
+            return;
+
+        if (getLongFromObjectOrReply(c, c->argv[3], &on, err) != C_OK)
+            return;
+
+        /* Bits can only be set or cleared... */
+        if (on & ~1) {
+            addReplyError(c, err);
+            return;
+        }
+
+        if ((o = lookupStringForBitCommand(c, bitoffset)) == NULL) return;
+
+        /* Get current values */
+        byte = bitoffset >> 3;
+        byteval = ((uint8_t *) o->ptr)[byte];
+        bit = 7 - (bitoffset & 0x7);
+        bitval = byteval & (1 << bit);
+
+        /* Update byte with new bit value and return original value */
+        byteval &= ~(1 << bit);
+        byteval |= ((on & 0x1) << bit);
+        ((uint8_t *) o->ptr)[byte] = byteval;
+        signalModifiedKey(c, c->db, c->argv[1]);
+        notifyKeyspaceEvent(NOTIFY_STRING, "setbit", c->argv[1], c->db->id);
+        server.dirty++;
+        addReply(c, bitval ? shared.cone : shared.czero);
+    }
 }
 
 /* GETBIT key offset */

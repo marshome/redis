@@ -482,10 +482,6 @@ int getGenericCommandWithHash(client *c, uint64_t hash) {
     return C_OK;
 }
 
-void getCommandPreprocess(client *c) {
-    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
-}
-
 void getCommand(client *c) {
     if (c->preprocess.cmd_preprocessed) {
         getGenericCommandWithHash(c, c->preprocess.key_hash);
@@ -686,10 +682,6 @@ void getexCommand(client *c) {
             server.dirty++;
         }
     }
-}
-
-void getdelCommandPreprocess(client *c) {
-    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
 }
 
 //ok
@@ -981,10 +973,6 @@ void incrbyfloatCommand(client *c) {
     rewriteClientCommandArgument(c, 3, shared.keepttl);
 }
 
-void appendCommandPreprocess(client *c) {
-    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
-}
-
 void appendCommand(client *c) {
     size_t totlen;
     robj *o, *append;
@@ -1046,10 +1034,6 @@ void appendCommand(client *c) {
         server.dirty++;
         addReplyLongLong(c, totlen);
     }
-}
-
-void strlenCommandPreprocess(client *c) {
-    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
 }
 
 void strlenCommand(client *c) {
