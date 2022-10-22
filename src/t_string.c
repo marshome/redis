@@ -380,20 +380,15 @@ void setnxCommandPreprocess(client *c) {
 }
 
 void setnxCommand(client *c) {
-    if (c->preprocess.cmd_preprocessed) {
-        setGenericCommandWithHash(c,
-                                  OBJ_SET_NX,
-                                  c->argv[1],
-                                  c->preprocess.key_hash,
-                                  c->argv[2],
-                                  NULL,
-                                  0,
-                                  shared.cone,
-                                  shared.czero);
-    } else {
-        c->argv[2] = tryObjectEncoding(c->argv[2]);
-        setGenericCommand(c, OBJ_SET_NX, c->argv[1], c->argv[2], NULL, 0, shared.cone, shared.czero);
-    }
+    setGenericCommandWithHash(c,
+                              OBJ_SET_NX,
+                              c->argv[1],
+                              c->preprocess.key_hash,
+                              c->argv[2],
+                              NULL,
+                              0,
+                              shared.cone,
+                              shared.czero);
 }
 
 void setexCommandPreprocess(client *c) {
@@ -402,20 +397,15 @@ void setexCommandPreprocess(client *c) {
 }
 
 void setexCommand(client *c) {
-    if (c->preprocess.cmd_preprocessed) {
-        setGenericCommandWithHash(c,
-                                  OBJ_EX,
-                                  c->argv[1],
-                                  c->preprocess.key_hash,
-                                  c->argv[3],
-                                  c->argv[2],
-                                  UNIT_SECONDS,
-                                  NULL,
-                                  NULL);
-    } else {
-        c->argv[3] = tryObjectEncoding(c->argv[3]);
-        setGenericCommand(c, OBJ_EX, c->argv[1], c->argv[3], c->argv[2], UNIT_SECONDS, NULL, NULL);
-    }
+    setGenericCommandWithHash(c,
+                              OBJ_EX,
+                              c->argv[1],
+                              c->preprocess.key_hash,
+                              c->argv[3],
+                              c->argv[2],
+                              UNIT_SECONDS,
+                              NULL,
+                              NULL);
 }
 
 void psetexCommandPreprocess(client *c) {
@@ -424,20 +414,15 @@ void psetexCommandPreprocess(client *c) {
 }
 
 void psetexCommand(client *c) {
-    if (c->preprocess.cmd_preprocessed) {
-        setGenericCommandWithHash(c,
-                                  OBJ_PX,
-                                  c->argv[1],
-                                  c->preprocess.key_hash,
-                                  c->argv[3],
-                                  c->argv[2],
-                                  UNIT_MILLISECONDS,
-                                  NULL,
-                                  NULL);
-    } else {
-        c->argv[3] = tryObjectEncoding(c->argv[3]);
-        setGenericCommand(c, OBJ_PX, c->argv[1], c->argv[3], c->argv[2], UNIT_MILLISECONDS, NULL, NULL);
-    }
+    setGenericCommandWithHash(c,
+                              OBJ_PX,
+                              c->argv[1],
+                              c->preprocess.key_hash,
+                              c->argv[3],
+                              c->argv[2],
+                              UNIT_MILLISECONDS,
+                              NULL,
+                              NULL);
 }
 
 int getGenericCommand(client *c) {
@@ -470,11 +455,7 @@ int getGenericCommandWithHash(client *c, uint64_t hash) {
 }
 
 void getCommand(client *c) {
-    if (c->preprocess.cmd_preprocessed) {
-        getGenericCommandWithHash(c, c->preprocess.key_hash);
-    } else {
-        getGenericCommand(c);
-    }
+    getGenericCommandWithHash(c, c->preprocess.key_hash);
 }
 
 void getexCommandPreprocess(client *c) {
@@ -492,8 +473,31 @@ void getexCommandPreprocess(client *c) {
     hashKeyPreprocess(c);
 }
 
+/*
+ * GETEX <key> [PERSIST][EX seconds][PX milliseconds][EXAT seconds-timestamp][PXAT milliseconds-timestamp]
+ *
+ * The getexCommand() function implements extended options and variants of the GET command. Unlike GET
+ * command this command is not read-only.
+ *
+ * The default behavior when no options are specified is same as GET and does not alter any TTL.
+ *
+ * Only one of the below options can be used at a given time.
+ *
+ * 1. PERSIST removes any TTL associated with the key.
+ * 2. EX Set expiry TTL in seconds.
+ * 3. PX Set expiry TTL in milliseconds.
+ * 4. EXAT Same like EX instead of specifying the number of seconds representing the TTL
+ *      (time to live), it takes an absolute Unix timestamp
+ * 5. PXAT Same like PX instead of specifying the number of milliseconds representing the TTL
+ *      (time to live), it takes an absolute Unix timestamp
+ *
+ * Command would either return the bulk string, error or nil.
+ */
 //ok
-void getexCommandPreprocessed(client *c) {
+void getexCommand(client *c) {
+    if (c->preprocess.cmd_stopped) {
+        return;
+    }
     robj *expire = c->preprocess.set_cmd_expire;
     int unit = c->preprocess.set_cmd_unit;
     int flags = c->preprocess.set_cmd_flags;
@@ -566,138 +570,19 @@ void getexCommandPreprocessed(client *c) {
     }
 }
 
-/*
- * GETEX <key> [PERSIST][EX seconds][PX milliseconds][EXAT seconds-timestamp][PXAT milliseconds-timestamp]
- *
- * The getexCommand() function implements extended options and variants of the GET command. Unlike GET
- * command this command is not read-only.
- *
- * The default behavior when no options are specified is same as GET and does not alter any TTL.
- *
- * Only one of the below options can be used at a given time.
- *
- * 1. PERSIST removes any TTL associated with the key.
- * 2. EX Set expiry TTL in seconds.
- * 3. PX Set expiry TTL in milliseconds.
- * 4. EXAT Same like EX instead of specifying the number of seconds representing the TTL
- *      (time to live), it takes an absolute Unix timestamp
- * 5. PXAT Same like PX instead of specifying the number of milliseconds representing the TTL
- *      (time to live), it takes an absolute Unix timestamp
- *
- * Command would either return the bulk string, error or nil.
- */
-//ok
-void getexCommand(client *c) {
-    if (c->preprocess.cmd_preprocessed) {
-        if (c->preprocess.cmd_stopped) {
-            return;
-        }
-        getexCommandPreprocessed(c);
-        return;
-    }
-
-    robj *expire = NULL;
-    int unit = UNIT_SECONDS;
-    int flags = OBJ_NO_FLAGS;
-
-    if (parseExtendedStringArgumentsOrReply(c, &flags, &unit, &expire, COMMAND_GET) != C_OK) {
-        return;
-    }
-
-    robj *o;
-
-    if ((o = lookupKeyReadOrReply(c, c->argv[1], shared.null[c->resp])) == NULL)
-        return;
-
-    if (checkType(c, o, OBJ_STRING)) {
-        return;
-    }
-
-    long long milliseconds = 0, when = 0;
-
-    /* Validate the expiration time value first */
-    if (expire) {
-        if (getLongLongFromObjectOrReply(c, expire, &milliseconds, NULL) != C_OK)
-            return;
-        if (milliseconds <= 0 || (unit == UNIT_SECONDS && milliseconds > LLONG_MAX / 1000)) {
-            /* Negative value provided or multiplication is gonna overflow. */
-            addReplyErrorFormat(c, "invalid expire time in %s", c->cmd->name);
-            return;
-        }
-        if (unit == UNIT_SECONDS) milliseconds *= 1000;
-        when = milliseconds;
-        if ((flags & OBJ_PX) || (flags & OBJ_EX))
-            when += mstime();
-        if (when <= 0) {
-            /* Overflow detected. */
-            addReplyErrorFormat(c, "invalid expire time in %s", c->cmd->name);
-            return;
-        }
-    }
-
-    /* We need to do this before we expire the key or delete it */
-    addReplyBulk(c,o);
-
-    /* This command is never propagated as is. It is either propagated as PEXPIRE[AT],DEL,UNLINK or PERSIST.
-     * This why it doesn't need special handling in feedAppendOnlyFile to convert relative expire time to absolute one. */
-    if (((flags & OBJ_PXAT) || (flags & OBJ_EXAT)) && checkAlreadyExpired(milliseconds)) {
-        /* When PXAT/EXAT absolute timestamp is specified, there can be a chance that timestamp
-         * has already elapsed so delete the key in that case. */
-        int deleted = server.lazyfree_lazy_expire ? dbAsyncDelete(c->db, c->argv[1]) :
-                      dbSyncDelete(c->db, c->argv[1]);
-        serverAssert(deleted);
-        robj *aux = server.lazyfree_lazy_expire ? shared.unlink : shared.del;
-        rewriteClientCommandVector(c,2,aux,c->argv[1]);
-        signalModifiedKey(c, c->db, c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
-        server.dirty++;
-    } else if (expire) {
-        setExpire(c,c->db,c->argv[1],when);
-        /* Propagate */
-        robj *exp = (flags & OBJ_PXAT) || (flags & OBJ_EXAT) ? shared.pexpireat : shared.pexpire;
-        robj* millisecondObj = createStringObjectFromLongLong(milliseconds);
-        rewriteClientCommandVector(c,3,exp,c->argv[1],millisecondObj);
-        decrRefCount(millisecondObj);
-        signalModifiedKey(c, c->db, c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"expire",c->argv[1],c->db->id);
-        server.dirty++;
-    } else if (flags & OBJ_PERSIST) {
-        if (removeExpire(c->db, c->argv[1])) {
-            signalModifiedKey(c, c->db, c->argv[1]);
-            rewriteClientCommandVector(c, 2, shared.persist, c->argv[1]);
-            notifyKeyspaceEvent(NOTIFY_GENERIC, "persist", c->argv[1], c->db->id);
-            server.dirty++;
-        }
-    }
-}
-
 //ok
 void getdelCommand(client *c) {
-    if (c->preprocess.cmd_preprocessed) {
-        uint64_t hash = c->preprocess.key_hash;
-        if (getGenericCommandWithHash(c, hash) == C_ERR) return;
-        int deleted = server.lazyfree_lazy_user_del ? dbAsyncDeleteWithHash(c->db, c->argv[1], hash) :
-                      dbSyncDeleteWithHash(c->db, c->argv[1], hash);
-        if (deleted) {
-            /* Propagate as DEL/UNLINK command */
-            robj *aux = server.lazyfree_lazy_user_del ? shared.unlink : shared.del;
-            rewriteClientCommandVector(c, 2, aux, c->argv[1]);
-            signalModifiedKeyWithHash(c, c->db, c->argv[1], hash);
-            notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
-            server.dirty++;
-        }
-    } else {
-        if (getGenericCommand(c) == C_ERR) return;
-        int deleted = server.lazyfree_lazy_user_del ? dbAsyncDelete(c->db, c->argv[1]) :
-                      dbSyncDelete(c->db, c->argv[1]);
-        if (deleted) {
-            /* Propagate as DEL/UNLINK command */
-            robj *aux = server.lazyfree_lazy_user_del ? shared.unlink : shared.del;
-            rewriteClientCommandVector(c, 2, aux, c->argv[1]);
-            signalModifiedKey(c, c->db, c->argv[1]);
-            notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
-            server.dirty++;
-        }
+    uint64_t hash = c->preprocess.key_hash;
+    if (getGenericCommandWithHash(c, hash) == C_ERR) return;
+    int deleted = server.lazyfree_lazy_user_del ? dbAsyncDeleteWithHash(c->db, c->argv[1], hash) :
+                  dbSyncDeleteWithHash(c->db, c->argv[1], hash);
+    if (deleted) {
+        /* Propagate as DEL/UNLINK command */
+        robj *aux = server.lazyfree_lazy_user_del ? shared.unlink : shared.del;
+        rewriteClientCommandVector(c, 2, aux, c->argv[1]);
+        signalModifiedKeyWithHash(c, c->db, c->argv[1], hash);
+        notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
+        server.dirty++;
     }
 }
 
