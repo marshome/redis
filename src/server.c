@@ -3987,11 +3987,8 @@ void afterCommand(client *c) {
 
 void preprocessCommand(client *c) {
     c->preprocess.stopped = 0;
-    c->preprocess.err = 0;
-    c->preprocess.cmd_preprocessed = 0;
-    c->preprocess.cmd_stopped = 0;
 
-    moduleCallCommandFilters(c);
+    moduleCallCommandFilters(c);//should be thread safe
 
     /* The QUIT command is handled separately. Normal command procs will
      * go through checking for replication and QUIT will cause trouble
@@ -4000,8 +3997,8 @@ void preprocessCommand(client *c) {
     if (!strcasecmp(c->argv[0]->ptr, "quit")) {
         addReply(c, shared.ok);
         c->flags |= CLIENT_CLOSE_AFTER_REPLY;
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_ERR;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4016,15 +4013,15 @@ void preprocessCommand(client *c) {
         rejectCommandFormat(c, "unknown command `%s`, with args beginning with: %s",
                             (char *) c->argv[0]->ptr, args);
         sdsfree(args);
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     } else if ((c->cmd->arity > 0 && c->cmd->arity != c->argc) ||
                (c->argc < -c->cmd->arity)) {
         rejectCommandFormat(c, "wrong number of arguments for '%s' command",
                             c->cmd->name);
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4047,8 +4044,8 @@ void preprocessCommand(client *c) {
          * non-authenticated state. */
         if (!(c->cmd->flags & CMD_NO_AUTH)) {
             rejectCommand(c, shared.noautherr);
-            c->preprocess.stopped = 1;
             c->preprocess.err = C_OK;
+            c->preprocess.stopped = 1;
             return;
         }
     }
@@ -4079,8 +4076,8 @@ void preprocessCommand(client *c) {
                 rejectCommandFormat(c, "no permission");
                 break;
         }
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4106,18 +4103,18 @@ void preprocessCommand(client *c) {
             }
             clusterRedirectClient(c, n, hashslot, error_code);
             c->cmd->rejected_calls++;
-            c->preprocess.stopped = 1;
             c->preprocess.err = C_OK;
+            c->preprocess.stopped = 1;
             return;
         }
     }
 
     /* Handle the maxmemory directive.
- *
- * Note that we do not want to reclaim memory if we are here re-entering
- * the event loop since there is a busy Lua script running in timeout
- * condition, to avoid mixing the propagation of scripts with the
- * propagation of DELs due to eviction. */
+     *
+     * Note that we do not want to reclaim memory if we are here re-entering
+     * the event loop since there is a busy Lua script running in timeout
+     * condition, to avoid mixing the propagation of scripts with the
+     * propagation of DELs due to eviction. */
     if (server.maxmemory && !server.lua_timedout) {
         int out_of_memory = (performEvictions() == EVICT_FAIL);
 
@@ -4130,8 +4127,8 @@ void preprocessCommand(client *c) {
         /* performEvictions may flush slave output buffers. This may result
          * in a slave, that may be the active client, to be freed. */
         if (server.current_client == NULL) {
-            c->preprocess.stopped = 1;
             c->preprocess.err = C_ERR;
+            c->preprocess.stopped = 1;
             return;
         }
 
@@ -4150,8 +4147,8 @@ void preprocessCommand(client *c) {
 
         if (out_of_memory && reject_cmd_on_oom) {
             rejectCommand(c, shared.oomerr);
-            c->preprocess.stopped = 1;
             c->preprocess.err = C_OK;
+            c->preprocess.stopped = 1;
             return;
         }
 
@@ -4179,8 +4176,8 @@ void preprocessCommand(client *c) {
             rejectCommandFormat(c,
                                 "-MISCONF Errors writing to the AOF file: %s",
                                 strerror(server.aof_last_write_errno));
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4192,8 +4189,8 @@ void preprocessCommand(client *c) {
         is_write_command &&
         server.repl_good_slaves_count < server.repl_min_slaves_to_write) {
         rejectCommand(c, shared.noreplicaserr);
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4203,8 +4200,8 @@ void preprocessCommand(client *c) {
         !(c->flags & CLIENT_MASTER) &&
         is_write_command) {
         rejectCommand(c, shared.roslaveerr);
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4221,8 +4218,8 @@ void preprocessCommand(client *c) {
                             "Can't execute '%s': only (P)SUBSCRIBE / "
                             "(P)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context",
                             c->cmd->name);
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4233,8 +4230,8 @@ void preprocessCommand(client *c) {
         server.repl_serve_stale_data == 0 &&
         is_denystale_command) {
         rejectCommand(c, shared.masterdownerr);
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4242,17 +4239,17 @@ void preprocessCommand(client *c) {
      * CMD_LOADING flag. */
     if (server.loading && is_denyloading_command) {
         rejectCommand(c, shared.loadingerr);
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
     /* Lua script too slow? Only allow a limited number of commands.
- * Note that we need to allow the transactions commands, otherwise clients
- * sending a transaction with pipelining without error checking, may have
- * the MULTI plus a few initial commands refused, then the timeout
- * condition resolves, and the bottom-half of the transaction gets
- * executed, see Github PR #7022. */
+     * Note that we need to allow the transactions commands, otherwise clients
+     * sending a transaction with pipelining without error checking, may have
+     * the MULTI plus a few initial commands refused, then the timeout
+     * condition resolves, and the bottom-half of the transaction gets
+     * executed, see Github PR #7022. */
     if (server.lua_timedout &&
         c->cmd->proc != authCommand &&
         c->cmd->proc != helloCommand &&
@@ -4269,8 +4266,8 @@ void preprocessCommand(client *c) {
           c->argc == 2 &&
           tolower(((char *) c->argv[1]->ptr)[0]) == 'k')) {
         rejectCommand(c, shared.slowscripterr);
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4279,8 +4276,8 @@ void preprocessCommand(client *c) {
      * from which replicas are exempt. */
     if ((c->flags & CLIENT_SLAVE) && (is_may_replicate_command || is_write_command || is_read_command)) {
         rejectCommandFormat(c, "Replica can't interract with the keyspace");
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
@@ -4291,22 +4288,25 @@ void preprocessCommand(client *c) {
          (server.client_pause_type == CLIENT_PAUSE_WRITE && is_may_replicate_command))) {
         c->bpop.timeout = 0;
         blockClient(c, BLOCKED_PAUSE);
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
+    /* Exec the command */
     if (c->flags & CLIENT_MULTI &&
         c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&
         c->cmd->proc != multiCommand && c->cmd->proc != watchCommand &&
         c->cmd->proc != resetCommand) {
         queueMultiCommand(c);
         addReply(c, shared.queued);
-        c->preprocess.stopped = 1;
         c->preprocess.err = C_OK;
+        c->preprocess.stopped = 1;
         return;
     }
 
+    c->preprocess.cmd_preprocessed = 0;
+    c->preprocess.cmd_stopped = 0;
     if (c->cmd->preprocess_proc != NULL) {
         c->cmd->preprocess_proc(c);
         c->preprocess.cmd_preprocessed = 1;
@@ -4337,12 +4337,10 @@ int processCommand(client *c) {
         serverAssert(!server.in_eval);
     }
 
-    /* Exec the command */
     call(c, CMD_CALL_FULL);
     c->woff = server.master_repl_offset;
-    if (listLength(server.ready_keys)) {
+    if (listLength(server.ready_keys))
         handleClientsBlockedOnKeys();
-    }
 
     return C_OK;
 }
