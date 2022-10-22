@@ -23,8 +23,9 @@
   - ./src/redis-benchmark -t set -c 4 --threads 4 -r 100000000 -n 50000
   - 官方
     - 46440.34 46983.65 46442.50
+    -
   - contest
-    - 
+    - 46442.50 45907.36 44871.22 47548.86
 - setex
 - setnx
 - get
