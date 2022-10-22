@@ -360,6 +360,7 @@ void setCommandPreprocess(client *c) {
 /* SET key value [NX] [XX] [KEEPTTL] [GET] [EX <seconds>] [PX <milliseconds>]
  *     [EXAT <seconds-timestamp>][PXAT <milliseconds-timestamp>] */
 void setCommand(client *c) {
+    if (c->preprocess.cmd_preprocessed) {
         if (c->preprocess.cmd_stopped) {
             return;
         }
@@ -372,6 +373,18 @@ void setCommand(client *c) {
                                   c->preprocess.set_cmd_unit,
                                   NULL,
                                   NULL);
+    } else {
+        robj *expire = NULL;
+        int unit = UNIT_SECONDS;
+        int flags = OBJ_NO_FLAGS;
+
+        if (parseExtendedStringArgumentsOrReply(c, &flags, &unit, &expire, COMMAND_SET) != C_OK) {
+            return;
+        }
+
+        c->argv[2] = tryObjectEncoding(c->argv[2]);
+        setGenericCommand(c, flags, c->argv[1], c->argv[2], expire, unit, NULL, NULL);
+    }
 }
 
 void setnxCommandPreprocess(client *c) {
@@ -380,15 +393,20 @@ void setnxCommandPreprocess(client *c) {
 }
 
 void setnxCommand(client *c) {
-    setGenericCommandWithHash(c,
-                              OBJ_SET_NX,
-                              c->argv[1],
-                              c->preprocess.key_hash,
-                              c->argv[2],
-                              NULL,
-                              0,
-                              shared.cone,
-                              shared.czero);
+    if (c->preprocess.cmd_preprocessed) {
+        setGenericCommandWithHash(c,
+                                  OBJ_SET_NX,
+                                  c->argv[1],
+                                  c->preprocess.key_hash,
+                                  c->argv[2],
+                                  NULL,
+                                  0,
+                                  shared.cone,
+                                  shared.czero);
+    } else {
+        c->argv[2] = tryObjectEncoding(c->argv[2]);
+        setGenericCommand(c, OBJ_SET_NX, c->argv[1], c->argv[2], NULL, 0, shared.cone, shared.czero);
+    }
 }
 
 void setexCommandPreprocess(client *c) {
@@ -397,15 +415,20 @@ void setexCommandPreprocess(client *c) {
 }
 
 void setexCommand(client *c) {
-    setGenericCommandWithHash(c,
-                              OBJ_EX,
-                              c->argv[1],
-                              c->preprocess.key_hash,
-                              c->argv[3],
-                              c->argv[2],
-                              UNIT_SECONDS,
-                              NULL,
-                              NULL);
+    if (c->preprocess.cmd_preprocessed) {
+        setGenericCommandWithHash(c,
+                                  OBJ_EX,
+                                  c->argv[1],
+                                  c->preprocess.key_hash,
+                                  c->argv[3],
+                                  c->argv[2],
+                                  UNIT_SECONDS,
+                                  NULL,
+                                  NULL);
+    } else {
+        c->argv[3] = tryObjectEncoding(c->argv[3]);
+        setGenericCommand(c, OBJ_EX, c->argv[1], c->argv[3], c->argv[2], UNIT_SECONDS, NULL, NULL);
+    }
 }
 
 void psetexCommandPreprocess(client *c) {
@@ -414,15 +437,20 @@ void psetexCommandPreprocess(client *c) {
 }
 
 void psetexCommand(client *c) {
-    setGenericCommandWithHash(c,
-                              OBJ_PX,
-                              c->argv[1],
-                              c->preprocess.key_hash,
-                              c->argv[3],
-                              c->argv[2],
-                              UNIT_MILLISECONDS,
-                              NULL,
-                              NULL);
+    if (c->preprocess.cmd_preprocessed) {
+        setGenericCommandWithHash(c,
+                                  OBJ_PX,
+                                  c->argv[1],
+                                  c->preprocess.key_hash,
+                                  c->argv[3],
+                                  c->argv[2],
+                                  UNIT_MILLISECONDS,
+                                  NULL,
+                                  NULL);
+    } else {
+        c->argv[3] = tryObjectEncoding(c->argv[3]);
+        setGenericCommand(c, OBJ_PX, c->argv[1], c->argv[3], c->argv[2], UNIT_MILLISECONDS, NULL, NULL);
+    }
 }
 
 int getGenericCommand(client *c) {
@@ -455,7 +483,11 @@ int getGenericCommandWithHash(client *c, uint64_t hash) {
 }
 
 void getCommand(client *c) {
-    getGenericCommandWithHash(c, c->preprocess.key_hash);
+    if (c->preprocess.cmd_preprocessed) {
+        getGenericCommandWithHash(c, c->preprocess.key_hash);
+    } else {
+        getGenericCommand(c);
+    }
 }
 
 void getexCommandPreprocess(client *c) {
@@ -473,31 +505,7 @@ void getexCommandPreprocess(client *c) {
     hashKeyPreprocess(c);
 }
 
-/*
- * GETEX <key> [PERSIST][EX seconds][PX milliseconds][EXAT seconds-timestamp][PXAT milliseconds-timestamp]
- *
- * The getexCommand() function implements extended options and variants of the GET command. Unlike GET
- * command this command is not read-only.
- *
- * The default behavior when no options are specified is same as GET and does not alter any TTL.
- *
- * Only one of the below options can be used at a given time.
- *
- * 1. PERSIST removes any TTL associated with the key.
- * 2. EX Set expiry TTL in seconds.
- * 3. PX Set expiry TTL in milliseconds.
- * 4. EXAT Same like EX instead of specifying the number of seconds representing the TTL
- *      (time to live), it takes an absolute Unix timestamp
- * 5. PXAT Same like PX instead of specifying the number of milliseconds representing the TTL
- *      (time to live), it takes an absolute Unix timestamp
- *
- * Command would either return the bulk string, error or nil.
- */
-//ok
-void getexCommand(client *c) {
-    if (c->preprocess.cmd_stopped) {
-        return;
-    }
+void getexCommandPreprocessed(client *c) {
     robj *expire = c->preprocess.set_cmd_expire;
     int unit = c->preprocess.set_cmd_unit;
     int flags = c->preprocess.set_cmd_flags;
@@ -569,20 +577,138 @@ void getexCommand(client *c) {
         }
     }
 }
+/*
+ * GETEX <key> [PERSIST][EX seconds][PX milliseconds][EXAT seconds-timestamp][PXAT milliseconds-timestamp]
+ *
+ * The getexCommand() function implements extended options and variants of the GET command. Unlike GET
+ * command this command is not read-only.
+ *
+ * The default behavior when no options are specified is same as GET and does not alter any TTL.
+ *
+ * Only one of the below options can be used at a given time.
+ *
+ * 1. PERSIST removes any TTL associated with the key.
+ * 2. EX Set expiry TTL in seconds.
+ * 3. PX Set expiry TTL in milliseconds.
+ * 4. EXAT Same like EX instead of specifying the number of seconds representing the TTL
+ *      (time to live), it takes an absolute Unix timestamp
+ * 5. PXAT Same like PX instead of specifying the number of milliseconds representing the TTL
+ *      (time to live), it takes an absolute Unix timestamp
+ *
+ * Command would either return the bulk string, error or nil.
+ */
+//ok
+void getexCommand(client *c) {
+    if (c->preprocess.cmd_preprocessed) {
+        if (c->preprocess.cmd_stopped) {
+            return;
+        }
+        getexCommandPreprocessed(c);
+        return;
+    }
+
+    robj *expire = NULL;
+    int unit = UNIT_SECONDS;
+    int flags = OBJ_NO_FLAGS;
+
+    if (parseExtendedStringArgumentsOrReply(c, &flags, &unit, &expire, COMMAND_GET) != C_OK) {
+        return;
+    }
+
+    robj *o;
+
+    if ((o = lookupKeyReadOrReply(c, c->argv[1], shared.null[c->resp])) == NULL)
+        return;
+
+    if (checkType(c, o, OBJ_STRING)) {
+        return;
+    }
+
+    long long milliseconds = 0, when = 0;
+
+    /* Validate the expiration time value first */
+    if (expire) {
+        if (getLongLongFromObjectOrReply(c, expire, &milliseconds, NULL) != C_OK)
+            return;
+        if (milliseconds <= 0 || (unit == UNIT_SECONDS && milliseconds > LLONG_MAX / 1000)) {
+            /* Negative value provided or multiplication is gonna overflow. */
+            addReplyErrorFormat(c, "invalid expire time in %s", c->cmd->name);
+            return;
+        }
+        if (unit == UNIT_SECONDS) milliseconds *= 1000;
+        when = milliseconds;
+        if ((flags & OBJ_PX) || (flags & OBJ_EX))
+            when += mstime();
+        if (when <= 0) {
+            /* Overflow detected. */
+            addReplyErrorFormat(c, "invalid expire time in %s", c->cmd->name);
+            return;
+        }
+    }
+
+    /* We need to do this before we expire the key or delete it */
+    addReplyBulk(c, o);
+
+    /* This command is never propagated as is. It is either propagated as PEXPIRE[AT],DEL,UNLINK or PERSIST.
+     * This why it doesn't need special handling in feedAppendOnlyFile to convert relative expire time to absolute one. */
+    if (((flags & OBJ_PXAT) || (flags & OBJ_EXAT)) && checkAlreadyExpired(milliseconds)) {
+        /* When PXAT/EXAT absolute timestamp is specified, there can be a chance that timestamp
+         * has already elapsed so delete the key in that case. */
+        int deleted = server.lazyfree_lazy_expire ? dbAsyncDelete(c->db, c->argv[1]) :
+                      dbSyncDelete(c->db, c->argv[1]);
+        serverAssert(deleted);
+        robj *aux = server.lazyfree_lazy_expire ? shared.unlink : shared.del;
+        rewriteClientCommandVector(c, 2, aux, c->argv[1]);
+        signalModifiedKey(c, c->db, c->argv[1]);
+        notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
+        server.dirty++;
+    } else if (expire) {
+        setExpire(c, c->db, c->argv[1], when);
+        /* Propagate */
+        robj *exp = (flags & OBJ_PXAT) || (flags & OBJ_EXAT) ? shared.pexpireat : shared.pexpire;
+        robj *millisecondObj = createStringObjectFromLongLong(milliseconds);
+        rewriteClientCommandVector(c, 3, exp, c->argv[1], millisecondObj);
+        decrRefCount(millisecondObj);
+        signalModifiedKey(c, c->db, c->argv[1]);
+        notifyKeyspaceEvent(NOTIFY_GENERIC, "expire", c->argv[1], c->db->id);
+        server.dirty++;
+    } else if (flags & OBJ_PERSIST) {
+        if (removeExpire(c->db, c->argv[1])) {
+            signalModifiedKey(c, c->db, c->argv[1]);
+            rewriteClientCommandVector(c, 2, shared.persist, c->argv[1]);
+            notifyKeyspaceEvent(NOTIFY_GENERIC, "persist", c->argv[1], c->db->id);
+            server.dirty++;
+        }
+    }
+}
 
 //ok
 void getdelCommand(client *c) {
-    uint64_t hash = c->preprocess.key_hash;
-    if (getGenericCommandWithHash(c, hash) == C_ERR) return;
-    int deleted = server.lazyfree_lazy_user_del ? dbAsyncDeleteWithHash(c->db, c->argv[1], hash) :
-                  dbSyncDeleteWithHash(c->db, c->argv[1], hash);
-    if (deleted) {
-        /* Propagate as DEL/UNLINK command */
-        robj *aux = server.lazyfree_lazy_user_del ? shared.unlink : shared.del;
-        rewriteClientCommandVector(c, 2, aux, c->argv[1]);
-        signalModifiedKeyWithHash(c, c->db, c->argv[1], hash);
-        notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
-        server.dirty++;
+    if (c->preprocess.cmd_preprocessed) {
+        uint64_t hash = c->preprocess.key_hash;
+        if (getGenericCommandWithHash(c, hash) == C_ERR) return;
+        int deleted = server.lazyfree_lazy_user_del ? dbAsyncDeleteWithHash(c->db, c->argv[1], hash) :
+                      dbSyncDeleteWithHash(c->db, c->argv[1], hash);
+        if (deleted) {
+            /* Propagate as DEL/UNLINK command */
+            robj *aux = server.lazyfree_lazy_user_del ? shared.unlink : shared.del;
+            rewriteClientCommandVector(c, 2, aux, c->argv[1]);
+            signalModifiedKeyWithHash(c, c->db, c->argv[1], hash);
+            notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
+            server.dirty++;
+        }
+    } else {
+        if (getGenericCommand(c) == C_ERR) return;
+        int deleted = server.lazyfree_lazy_user_del ? dbAsyncDelete(c->db, c->argv[1]) :
+                      dbSyncDelete(c->db, c->argv[1]);
+        if (deleted) {
+            /* Propagate as DEL/UNLINK command */
+            robj *aux = server.lazyfree_lazy_user_del ? shared.unlink : shared.del;
+            rewriteClientCommandVector(c, 2, aux, c->argv[1]);
+            signalModifiedKey(c, c->db, c->argv[1]);
+            notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
+            server.dirty++;
+        }
     }
 }
 
@@ -593,14 +719,25 @@ void getsetCommandPreprocess(client *c) {
 
 //ok
 void getsetCommand(client *c) {
-    uint64_t hash = c->preprocess.key_hash;
-    if (getGenericCommandWithHash(c, hash) == C_ERR) return;
-    setKeyWithHash(c, c->db, c->argv[1], hash, c->argv[2]);
-    notifyKeyspaceEvent(NOTIFY_STRING, "set", c->argv[1], c->db->id);
-    server.dirty++;
+    if (c->preprocess.cmd_preprocessed) {
+        uint64_t hash = c->preprocess.key_hash;
+        if (getGenericCommandWithHash(c, hash) == C_ERR) return;
+        setKeyWithHash(c, c->db, c->argv[1], hash, c->argv[2]);
+        notifyKeyspaceEvent(NOTIFY_STRING, "set", c->argv[1], c->db->id);
+        server.dirty++;
 
-    /* Propagate as SET command */
-    rewriteClientCommandArgument(c, 0, shared.set);
+        /* Propagate as SET command */
+        rewriteClientCommandArgument(c, 0, shared.set);
+    } else {
+        if (getGenericCommand(c) == C_ERR) return;
+        c->argv[2] = tryObjectEncoding(c->argv[2]);
+        setKey(c, c->db, c->argv[1], c->argv[2]);
+        notifyKeyspaceEvent(NOTIFY_STRING, "set", c->argv[1], c->db->id);
+        server.dirty++;
+
+        /* Propagate as SET command */
+        rewriteClientCommandArgument(c, 0, shared.set);
+    }
 }
 
 void setrangeCommand(client *c) {
@@ -751,14 +888,51 @@ void msetGenericCommand(client *c, int nx) {
 }
 
 void msetCommand(client *c) {
-    msetGenericCommand(c,0);
+    msetGenericCommand(c, 0);
 }
 
 void msetnxCommand(client *c) {
-    msetGenericCommand(c,1);
+    msetGenericCommand(c, 1);
 }
 
 void incrDecrCommand(client *c, long long incr) {
+    long long value, oldvalue;
+    robj *o, *new;
+
+    o = lookupKeyWrite(c->db, c->argv[1]);
+    if (checkType(c, o, OBJ_STRING)) return;
+    if (getLongLongFromObjectOrReply(c, o, &value, NULL) != C_OK) return;
+
+    oldvalue = value;
+    if ((incr < 0 && oldvalue < 0 && incr < (LLONG_MIN - oldvalue)) ||
+        (incr > 0 && oldvalue > 0 && incr > (LLONG_MAX - oldvalue))) {
+        addReplyError(c, "increment or decrement would overflow");
+        return;
+    }
+    value += incr;
+
+    if (o && o->refcount == 1 && o->encoding == OBJ_ENCODING_INT &&
+        (value < 0 || value >= OBJ_SHARED_INTEGERS) &&
+        value >= LONG_MIN && value <= LONG_MAX) {
+        new = o;
+        o->ptr = (void *) ((long) value);
+    } else {
+        new = createStringObjectFromLongLongForValue(value);
+        if (o) {
+            dbOverwrite(c->db, c->argv[1], new);
+        } else {
+            dbAdd(c->db, c->argv[1], new);
+        }
+    }
+    signalModifiedKey(c, c->db, c->argv[1]);
+    notifyKeyspaceEvent(NOTIFY_STRING, "incrby", c->argv[1], c->db->id);
+    server.dirty++;
+    addReply(c, shared.colon);
+    addReply(c, new);
+    addReply(c, shared.crlf);
+}
+
+void incrDecrCommandWithHash(client *c, long long incr) {
     uint64_t hash = c->preprocess.key_hash;
     long long value, oldvalue;
     robj *o, *new;
@@ -797,58 +971,105 @@ void incrDecrCommand(client *c, long long incr) {
 }
 
 void incrCommand(client *c) {
-    incrDecrCommand(c,1);
+    if (c->preprocess.cmd_preprocessed) {
+        incrDecrCommandWithHash(c, 1);
+    } else {
+        incrDecrCommand(c, 1);
+    }
 }
 
 void decrCommand(client *c) {
-    incrDecrCommand(c,-1);
+    if (c->preprocess.cmd_preprocessed) {
+        incrDecrCommandWithHash(c, -1);
+    } else {
+        incrDecrCommand(c, -1);
+    }
 }
 
 void incrbyCommand(client *c) {
     long long incr;
-
     if (getLongLongFromObjectOrReply(c, c->argv[2], &incr, NULL) != C_OK) return;
-    incrDecrCommand(c,incr);
+    if (c->preprocess.cmd_preprocessed) {
+        incrDecrCommandWithHash(c, incr);
+    } else {
+        incrDecrCommand(c, incr);
+    }
 }
 
 void decrbyCommand(client *c) {
     long long incr;
-
     if (getLongLongFromObjectOrReply(c, c->argv[2], &incr, NULL) != C_OK) return;
-    incrDecrCommand(c,-incr);
+    if (c->preprocess.cmd_preprocessed) {
+        incrDecrCommandWithHash(c, -incr);
+    } else {
+        incrDecrCommand(c, -incr);
+    }
 }
 
 void incrbyfloatCommand(client *c) {
-    long double incr, value;
-    robj *o, *new;
-    uint64_t hash = c->preprocess.key_hash;
-    o = lookupKeyWriteWithHash(c->db, c->argv[1], hash);
-    if (checkType(c, o, OBJ_STRING)) return;
-    if (getLongDoubleFromObjectOrReply(c, o, &value, NULL) != C_OK ||
-        getLongDoubleFromObjectOrReply(c, c->argv[2], &incr, NULL) != C_OK)
-        return;
+    if (c->preprocess.cmd_preprocessed) {
+        long double incr, value;
+        robj *o, *new;
+        uint64_t hash = c->preprocess.key_hash;
+        o = lookupKeyWriteWithHash(c->db, c->argv[1], hash);
+        if (checkType(c, o, OBJ_STRING)) return;
+        if (getLongDoubleFromObjectOrReply(c, o, &value, NULL) != C_OK ||
+            getLongDoubleFromObjectOrReply(c, c->argv[2], &incr, NULL) != C_OK)
+            return;
 
-    value += incr;
-    if (isnan(value) || isinf(value)) {
-        addReplyError(c, "increment would produce NaN or Infinity");
-        return;
+        value += incr;
+        if (isnan(value) || isinf(value)) {
+            addReplyError(c, "increment would produce NaN or Infinity");
+            return;
+        }
+        new = createStringObjectFromLongDouble(value, 1);
+        if (o)
+            dbOverwriteWithHash(c->db, c->argv[1], hash, new);
+        else
+            dbAddWithHash(c->db, c->argv[1], hash, new);
+        signalModifiedKeyWithHash(c, c->db, c->argv[1], hash);
+        notifyKeyspaceEvent(NOTIFY_STRING, "incrbyfloat", c->argv[1], c->db->id);
+        server.dirty++;
+        addReplyBulk(c, new);
+
+        /* Always replicate INCRBYFLOAT as a SET command with the final value
+         * in order to make sure that differences in float precision or formatting
+         * will not create differences in replicas or after an AOF restart. */
+        rewriteClientCommandArgument(c, 0, shared.set);
+        rewriteClientCommandArgument(c, 2, new);
+        rewriteClientCommandArgument(c, 3, shared.keepttl);
+    } else {
+        long double incr, value;
+        robj *o, *new;
+
+        o = lookupKeyWrite(c->db, c->argv[1]);
+        if (checkType(c, o, OBJ_STRING)) return;
+        if (getLongDoubleFromObjectOrReply(c, o, &value, NULL) != C_OK ||
+            getLongDoubleFromObjectOrReply(c, c->argv[2], &incr, NULL) != C_OK)
+            return;
+
+        value += incr;
+        if (isnan(value) || isinf(value)) {
+            addReplyError(c, "increment would produce NaN or Infinity");
+            return;
+        }
+        new = createStringObjectFromLongDouble(value, 1);
+        if (o)
+            dbOverwrite(c->db, c->argv[1], new);
+        else
+            dbAdd(c->db, c->argv[1], new);
+        signalModifiedKey(c, c->db, c->argv[1]);
+        notifyKeyspaceEvent(NOTIFY_STRING, "incrbyfloat", c->argv[1], c->db->id);
+        server.dirty++;
+        addReplyBulk(c, new);
+
+        /* Always replicate INCRBYFLOAT as a SET command with the final value
+         * in order to make sure that differences in float precision or formatting
+         * will not create differences in replicas or after an AOF restart. */
+        rewriteClientCommandArgument(c, 0, shared.set);
+        rewriteClientCommandArgument(c, 2, new);
+        rewriteClientCommandArgument(c, 3, shared.keepttl);
     }
-    new = createStringObjectFromLongDouble(value, 1);
-    if (o)
-        dbOverwriteWithHash(c->db, c->argv[1], hash, new);
-    else
-        dbAddWithHash(c->db, c->argv[1], hash, new);
-    signalModifiedKeyWithHash(c, c->db, c->argv[1], hash);
-    notifyKeyspaceEvent(NOTIFY_STRING, "incrbyfloat", c->argv[1], c->db->id);
-    server.dirty++;
-    addReplyBulk(c, new);
-
-    /* Always replicate INCRBYFLOAT as a SET command with the final value
-     * in order to make sure that differences in float precision or formatting
-     * will not create differences in replicas or after an AOF restart. */
-    rewriteClientCommandArgument(c, 0, shared.set);
-    rewriteClientCommandArgument(c, 2, new);
-    rewriteClientCommandArgument(c, 3, shared.keepttl);
 }
 
 void appendCommand(client *c) {
