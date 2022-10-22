@@ -672,19 +672,24 @@ typedef struct RedisModuleDigest {
 #define OBJ_STATIC_REFCOUNT (INT_MAX-1) /* Object allocated in the stack. */
 #define OBJ_FIRST_SPECIAL_REFCOUNT OBJ_STATIC_REFCOUNT
 typedef struct redisObject {
-    unsigned type:4;
-    unsigned encoding:4;
-    unsigned lru:LRU_BITS; /* LRU time (relative to global lru_clock) or
+    unsigned type: 4;
+    unsigned encoding: 4;
+    unsigned lru: LRU_BITS; /* LRU time (relative to global lru_clock) or
                             * LFU data (least significant 8 bits frequency
                             * and most significant 16 bits access time). */
     int refcount;
     void *ptr;
 } robj;
 
+typedef struct objectWithHash {
+    robj obj;
+    uint64_t hash;
+} objectWithHash;
+
 /* The a string name for an object's type as listed above
  * Native types are checked against the OBJ_STRING, OBJ_LIST, OBJ_* defines,
  * and Module types have their registered name returned. */
-char *getObjectTypeName(robj*);
+char *getObjectTypeName(robj *);
 
 /* Macro used to initialize a Redis object allocated on the stack.
  * Note that this macro is taken near the structure definition to make sure
@@ -2017,7 +2022,11 @@ void freeListObject(robj *o);
 void freeSetObject(robj *o);
 void freeZsetObject(robj *o);
 void freeHashObject(robj *o);
+
 robj *createObject(int type, void *ptr);
+
+robj *createObjectWithHash(int type, void *ptr);
+
 robj *createStringObject(const char *ptr, size_t len);
 robj *createRawStringObject(const char *ptr, size_t len);
 robj *createEmbeddedStringObject(const char *ptr, size_t len);
