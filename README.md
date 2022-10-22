@@ -25,6 +25,3 @@
 
 - hget
 
-# 压测示例：
-
-- ./src/redis-benchmark -c 4 --threads 2 -n 1000000 incr foo
