@@ -2692,7 +2692,9 @@ void getCommandPreprocess(client *c);
 
 void getCommand(client *c);//ok
 
-void getexCommand(client *c);
+void getexCommandPreprocess(client *c);
+
+void getexCommand(client *c);//ok
 
 void getdelCommand(client *c);
 
@@ -2701,7 +2703,9 @@ void delCommand(client *c);
 void unlinkCommand(client *c);
 
 void existsCommand(client *c);
+
 void setbitCommand(client *c);
+
 void getbitCommand(client *c);
 void bitfieldCommand(client *c);
 void bitfieldroCommand(client *c);

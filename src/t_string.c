@@ -494,6 +494,95 @@ void getCommand(client *c) {
     }
 }
 
+void getexCommandPreprocess(client *c) {
+    c->preprocess.set_cmd_expire = NULL;
+    c->preprocess.set_cmd_unit = UNIT_SECONDS;
+    c->preprocess.set_cmd_flags = OBJ_NO_FLAGS;
+    if (parseExtendedStringArgumentsOrReply(c,
+                                            &c->preprocess.set_cmd_flags,
+                                            &c->preprocess.set_cmd_unit,
+                                            &c->preprocess.set_cmd_expire,
+                                            COMMAND_GET) != C_OK) {
+        c->preprocess.cmd_stopped = 1;
+        return;
+    }
+    c->preprocess.key_hash = dictSdsHash(c->argv[1]);
+}
+
+//ok
+void getexCommandPreprocessed(client *c) {
+    robj *expire = c->preprocess.set_cmd_expire;
+    int unit = c->preprocess.set_cmd_unit;
+    int flags = c->preprocess.set_cmd_flags;
+    uint64_t hash = c->preprocess.key_hash;
+
+    robj *o;
+
+    if ((o = lookupKeyReadOrReplyWithHash(c, c->argv[1], hash, shared.null[c->resp])) == NULL)
+        return;
+
+    if (checkType(c, o, OBJ_STRING)) {
+        return;
+    }
+
+    long long milliseconds = 0, when = 0;
+
+    /* Validate the expiration time value first */
+    if (expire) {
+        if (getLongLongFromObjectOrReply(c, expire, &milliseconds, NULL) != C_OK)
+            return;
+        if (milliseconds <= 0 || (unit == UNIT_SECONDS && milliseconds > LLONG_MAX / 1000)) {
+            /* Negative value provided or multiplication is gonna overflow. */
+            addReplyErrorFormat(c, "invalid expire time in %s", c->cmd->name);
+            return;
+        }
+        if (unit == UNIT_SECONDS) milliseconds *= 1000;
+        when = milliseconds;
+        if ((flags & OBJ_PX) || (flags & OBJ_EX))
+            when += mstime();
+        if (when <= 0) {
+            /* Overflow detected. */
+            addReplyErrorFormat(c, "invalid expire time in %s", c->cmd->name);
+            return;
+        }
+    }
+
+    /* We need to do this before we expire the key or delete it */
+    addReplyBulk(c, o);
+
+    /* This command is never propagated as is. It is either propagated as PEXPIRE[AT],DEL,UNLINK or PERSIST.
+     * This why it doesn't need special handling in feedAppendOnlyFile to convert relative expire time to absolute one. */
+    if (((flags & OBJ_PXAT) || (flags & OBJ_EXAT)) && checkAlreadyExpired(milliseconds)) {
+        /* When PXAT/EXAT absolute timestamp is specified, there can be a chance that timestamp
+         * has already elapsed so delete the key in that case. */
+        int deleted = server.lazyfree_lazy_expire ? dbAsyncDeleteWithHash(c->db, c->argv[1], hash) :
+                      dbSyncDeleteWithHash(c->db, c->argv[1], hash);
+        serverAssert(deleted);
+        robj *aux = server.lazyfree_lazy_expire ? shared.unlink : shared.del;
+        rewriteClientCommandVector(c, 2, aux, c->argv[1]);
+        signalModifiedKeyWithHash(c, c->db, c->argv[1], hash);
+        notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[1], c->db->id);
+        server.dirty++;
+    } else if (expire) {
+        setExpireWithHash(c, c->db, c->argv[1], hash, when);
+        /* Propagate */
+        robj *exp = (flags & OBJ_PXAT) || (flags & OBJ_EXAT) ? shared.pexpireat : shared.pexpire;
+        robj *millisecondObj = createStringObjectFromLongLong(milliseconds);
+        rewriteClientCommandVector(c, 3, exp, c->argv[1], millisecondObj);
+        decrRefCount(millisecondObj);
+        signalModifiedKeyWithHash(c, c->db, c->argv[1], hash);
+        notifyKeyspaceEvent(NOTIFY_GENERIC, "expire", c->argv[1], c->db->id);
+        server.dirty++;
+    } else if (flags & OBJ_PERSIST) {
+        if (removeExpireWithHash(c->db, c->argv[1], hash)) {
+            signalModifiedKeyWithHash(c, c->db, c->argv[1], hash);
+            rewriteClientCommandVector(c, 2, shared.persist, c->argv[1]);
+            notifyKeyspaceEvent(NOTIFY_GENERIC, "persist", c->argv[1], c->db->id);
+            server.dirty++;
+        }
+    }
+}
+
 /*
  * GETEX <key> [PERSIST][EX seconds][PX milliseconds][EXAT seconds-timestamp][PXAT milliseconds-timestamp]
  *
@@ -514,21 +603,30 @@ void getCommand(client *c) {
  *
  * Command would either return the bulk string, error or nil.
  */
+//ok
 void getexCommand(client *c) {
+    if (c->preprocess.cmd_preprocessed) {
+        if (c->preprocess.cmd_stopped) {
+            return;
+        }
+        getexCommandPreprocessed(c);
+        return;
+    }
+
     robj *expire = NULL;
     int unit = UNIT_SECONDS;
     int flags = OBJ_NO_FLAGS;
 
-    if (parseExtendedStringArgumentsOrReply(c,&flags,&unit,&expire,COMMAND_GET) != C_OK) {
+    if (parseExtendedStringArgumentsOrReply(c, &flags, &unit, &expire, COMMAND_GET) != C_OK) {
         return;
     }
 
     robj *o;
 
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.null[c->resp])) == NULL)
+    if ((o = lookupKeyReadOrReply(c, c->argv[1], shared.null[c->resp])) == NULL)
         return;
 
-    if (checkType(c,o,OBJ_STRING)) {
+    if (checkType(c, o, OBJ_STRING)) {
         return;
     }
 

@@ -203,7 +203,7 @@ struct redisCommand redisCommandTable[] = {
 
         {"getex",  getexCommand,  -2,
                 "write fast @string",
-                0, NULL, 1, 1, 1, 0, 0, 0, NULL},
+                0, NULL, 1, 1, 1, 0, 0, 0, getexCommandPreprocess},
 
         {"getdel", getdelCommand, 2,
                 "write fast @string",
